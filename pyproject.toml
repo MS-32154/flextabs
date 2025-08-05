@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flextabs"
+version = "0.1.0"
+description = "A flexible and extensible tab manager widget for tkinter applications built on top of ttk.Notebook"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+authors = [
+    {name = "MS-32154", email = "msttoffg@gmail.com"}
+]
+keywords = ["tkinter", "ttk", "Notebook", "tabs", "gui", "widget", "interface"]
+
+[project.urls]
+Homepage = "https://github.com/MS-32154/flextabs"
+"Bug Reports" = "https://github.com/MS-32154/flextabs/issues"
+Source = "https://github.com/MS-32154/flextabs"
