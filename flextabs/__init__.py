@@ -11,7 +11,7 @@ from .enums import TabPosition, CloseMode, CloseConfirmationType
 from .openers import ToolbarOpener, SidebarOpener, MenuOpener
 from .widgets import TooltipWidget, ToastNotification
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "MS-32154"
 __email__ = "msttoffg@gmail.com"
 

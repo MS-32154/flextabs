@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="flextabs",
-    version="0.1.0",
+    version="0.1.1",
     author="MS-32154",
     author_email="msttoffg@gmail.com",
     description="A flexible and extensible tab manager widget for tkinter applications",

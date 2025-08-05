@@ -1,3 +1,7 @@
+[![PyPI version](https://img.shields.io/pypi/v/flextabs.svg)](https://https://pypi.org/project/flextabs/)
+[![Python](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/github/license/MS-32154/flextabs.svg)](LICENSE)
+
 # FlexTabs
 
 A flexible and extensible tab manager widget for tkinter applications built on top of `ttk.Notebook`. While `ttk.Notebook` provides the basic tab interface, FlexTabs extends it with multiple tab opening mechanisms (toolbar, sidebar, menu), advanced tab management features, and customizable behavior options.
@@ -61,7 +65,7 @@ pip install flextabs
 
 Or clone the repository:
 ```bash
-git clone https://github.com/your-username/flextabs.git
+git clone https://github.com/MS-32154/flextabs.git
 cd flextabs
 pip install -e .
 ```
@@ -610,7 +614,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-### Version 0.1.0
+### Version 0.1.1
 - Initial release
 - Support for Toolbar, Sidebar, and Menu openers
 - Tab lifecycle management
@@ -625,7 +629,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you encounter any issues or have questions, please:
 
 1. Check the [examples](#examples) section
-2. Search existing [GitHub Issues](https://github.com/your-username/flextabs/issues)
+2. Search existing [GitHub Issues](https://github.com/MS-32154/flextabs/issues)
 3. Create a new issue with:
    - Python version
    - Operating system
