@@ -1,9 +1,10 @@
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
+from PIL import ImageTk
 from typing import Optional, Callable
 
-from .tab_base import TabConfig, TabContent
+from .tab_base import TabConfig, TabContent, IconManager
 from .enums import CloseConfirmationType, CloseMode
 from .openers import ToolbarOpener, MenuOpener, SidebarOpener
 from .widgets import ToastNotification
@@ -26,6 +27,11 @@ class TabManager(ttk.Frame):
         ) = CloseConfirmationType.NONE,
         close_mode: str | CloseMode = CloseMode.ACTIVE_ONLY,
         enable_keyboard_shortcuts: bool = True,
+        # Separate notebook tab icon configuration
+        notebook_icon_size: tuple = (16, 16),
+        show_notebook_icons: bool = True,
+        notebook_fallback_icon_key: str = "default",
+        use_notebook_fallback_icons: bool = True,
         **kwargs,
     ):
 
@@ -39,6 +45,12 @@ class TabManager(ttk.Frame):
         self.close_confirmation = close_confirmation
         self.enable_keyboard_shortcuts = enable_keyboard_shortcuts
 
+        # Notebook icon configuration (separate from opener)
+        self.notebook_icon_size = notebook_icon_size
+        self.show_notebook_icons = show_notebook_icons
+        self.notebook_fallback_icon_key = notebook_fallback_icon_key
+        self.use_notebook_fallback_icons = use_notebook_fallback_icons
+
         # Handle enum conversions
         self.close_confirmation_type = (
             CloseConfirmationType(close_confirmation_type)
@@ -51,6 +63,7 @@ class TabManager(ttk.Frame):
 
         # State management
         self.tab_states = {}
+        self._tab_icons = {}  # Cache for notebook tab icons
         self._initialize_tab_states(tab_configs)
 
         # Event callbacks
@@ -71,6 +84,7 @@ class TabManager(ttk.Frame):
             self._setup_close_buttons()
             if self.enable_keyboard_shortcuts:
                 self._setup_keyboard_shortcuts()
+            self._preload_icons()
         except Exception as e:
             self.cleanup()
             raise RuntimeError(f"Failed to initialize TabManager: {e}")
@@ -86,6 +100,75 @@ class TabManager(ttk.Frame):
                 "content_instance": None,
                 "last_error": None,
             }
+
+    def _preload_icons(self):
+        """Preload all icons for better performance."""
+        # Collect all icon paths for both contexts
+        opener_icon_paths = []
+        tab_icon_paths = []
+
+        for config in self.tab_configs.values():
+            opener_icon = config.get_icon("opener")
+            tab_icon = config.get_icon("tab")
+
+            if opener_icon:
+                opener_icon_paths.append(opener_icon)
+            if tab_icon:
+                tab_icon_paths.append(tab_icon)
+
+        # Preload opener icons
+        if opener_icon_paths and hasattr(self.opener, "icon_size"):
+            IconManager.preload_icons(opener_icon_paths, self.opener.icon_size)
+
+        # Preload notebook tab icons
+        if tab_icon_paths and self.show_notebook_icons:
+            IconManager.preload_icons(tab_icon_paths, self.notebook_icon_size)
+
+    def _load_notebook_icon(
+        self, tab_config: TabConfig
+    ) -> Optional[ImageTk.PhotoImage]:
+        """Load icon for notebook tab."""
+        if not self.show_notebook_icons:
+            return None
+
+        icon_path = tab_config.get_icon("tab")
+        if not icon_path:
+            return None
+
+        cache_key = f"tab_{tab_config.id}"
+        if cache_key not in self._tab_icons:
+            self._tab_icons[cache_key] = IconManager.get_icon(
+                icon_path, self.notebook_icon_size
+            )
+
+        return self._tab_icons[cache_key]
+
+    def _get_tab_text_with_icon(self, tab_config: TabConfig) -> str:
+        """Get tab text, potentially with emoji icon."""
+        text = tab_config.title
+
+        # Add unclosable indicator
+        if not tab_config.closable:
+            text = f"• {text}"
+
+        icon_path = tab_config.get_icon("tab")
+        cache_key = f"tab_{tab_config.id}"
+
+        # If icon looks like emoji and no PhotoImage was loaded
+        if self.show_notebook_icons and icon_path and len(icon_path) <= 4:
+            text = f"{icon_path} {text}"
+        elif (
+            self.show_notebook_icons
+            and self.use_notebook_fallback_icons
+            and cache_key not in self._tab_icons
+        ):
+            # Use fallback icon if no image was loaded
+            fallback_text = IconManager.get_fallback_text(
+                self.notebook_fallback_icon_key
+            )
+            text = f"{fallback_text} {text}"
+
+        return text
 
     def _setup_opener(self, opener_type: str):
         """Setup the tab opener based on type."""
@@ -319,7 +402,7 @@ class TabManager(ttk.Frame):
             return False
 
     def _create_tab(self, tab_id: str, state: dict, config: TabConfig) -> bool:
-        """Create a new tab."""
+        """Create a new tab with icon support."""
         # Create tab container and content
         state["tab_object"] = ttk.Frame(self.notebook)
 
@@ -331,9 +414,22 @@ class TabManager(ttk.Frame):
             state["tab_object"].destroy()
             raise e
 
-        # Add to notebook
-        tab_text = f"• {config.title}" if not config.closable else config.title
-        self.notebook.add(state["tab_object"], text=tab_text)
+        # Get icon and text for notebook tab
+        icon = self._load_notebook_icon(config)
+        tab_text = self._get_tab_text_with_icon(config)
+
+        # Add to notebook with icon if available
+        add_kwargs = {"text": tab_text}
+        if icon:
+            add_kwargs["image"] = icon
+            add_kwargs["compound"] = "left"
+
+        self.notebook.add(state["tab_object"], **add_kwargs)
+
+        # Keep reference to prevent garbage collection
+        if icon:
+            state["tab_object"]._tab_icon = icon
+
         state["tab_index"] = self.notebook.index("end") - 1
         state["opened"] = True
         state["exited"] = False
@@ -519,6 +615,15 @@ class TabManager(ttk.Frame):
             "last_error": None,
         }
 
+        # Preload icons for new tab
+        opener_icon = config.get_icon("opener")
+        tab_icon = config.get_icon("tab")
+
+        if opener_icon and hasattr(self.opener, "icon_size"):
+            IconManager.get_icon(opener_icon, self.opener.icon_size)
+        if tab_icon and self.show_notebook_icons:
+            IconManager.get_icon(tab_icon, self.notebook_icon_size)
+
         # Update opener and keyboard shortcut
         if hasattr(self.opener, "refresh_opener"):
             try:
@@ -552,6 +657,11 @@ class TabManager(ttk.Frame):
         del self.tab_configs[tab_id]
         del self.tab_states[tab_id]
 
+        # Clean up cached icons
+        cache_key = f"tab_{tab_id}"
+        if cache_key in self._tab_icons:
+            del self._tab_icons[cache_key]
+
         # Update opener
         if hasattr(self.opener, "refresh_opener"):
             try:
@@ -574,6 +684,114 @@ class TabManager(ttk.Frame):
     ):
         """Show a toast notification."""
         ToastNotification.show(self, message, duration, toast_type)
+
+    def refresh_tab_icons(self):
+        """Refresh all tab icons (useful after changing icon files)."""
+        # Clear icon caches
+        IconManager.clear_cache()
+        self._tab_icons.clear()
+
+        # Clear opener icons if it has them
+        if hasattr(self.opener, "_icons"):
+            self.opener._icons.clear()
+
+        # Preload icons again
+        self._preload_icons()
+
+        # Use smart refresh for opener to preserve layout
+        if hasattr(self.opener, "refresh_opener"):
+            try:
+                self.opener.refresh_opener(list(self.tab_configs.values()))
+            except Exception as e:
+                print(f"Warning: Opener refresh failed: {e}")
+                # Fallback: try to recreate just the opener
+                try:
+                    opener_type = (
+                        type(self.opener).__name__.replace("Opener", "").lower()
+                    )
+                    self._setup_opener(opener_type)
+                except:
+                    pass
+
+        # Update existing notebook tabs without changing their order
+        for tab_id, state in self.tab_states.items():
+            if state["opened"] and state["tab_index"] is not None:
+                config = self.tab_configs[tab_id]
+                icon = self._load_notebook_icon(config)
+                tab_text = self._get_tab_text_with_icon(config)
+
+                try:
+                    tab_widget = state["tab_object"]
+                    if icon:
+                        self.notebook.tab(
+                            tab_widget, text=tab_text, image=icon, compound="left"
+                        )
+                        # Keep reference to prevent garbage collection
+                        tab_widget._tab_icon = icon
+                    else:
+                        self.notebook.tab(tab_widget, text=tab_text, image="")
+                        # Remove old icon reference
+                        if hasattr(tab_widget, "_tab_icon"):
+                            delattr(tab_widget, "_tab_icon")
+                except Exception as e:
+                    print(f"Warning: Failed to update tab {tab_id}: {e}")
+
+    def set_notebook_icon_settings(
+        self,
+        show_icons: bool = None,
+        icon_size: tuple = None,
+        fallback_icon_key: str = None,
+        use_fallback_icons: bool = None,
+    ):
+        """Update notebook icon settings at runtime."""
+        if show_icons is not None:
+            self.show_notebook_icons = show_icons
+        if icon_size is not None:
+            self.notebook_icon_size = icon_size
+        if fallback_icon_key is not None:
+            self.notebook_fallback_icon_key = fallback_icon_key
+        if use_fallback_icons is not None:
+            self.use_notebook_fallback_icons = use_fallback_icons
+
+        if any(
+            x is not None
+            for x in [show_icons, icon_size, fallback_icon_key, use_fallback_icons]
+        ):
+            self.refresh_tab_icons()
+
+    def set_opener_icon_settings(self, **kwargs):
+        """Update opener icon settings at runtime."""
+        if hasattr(self.opener, "show_icons") and "show_icons" in kwargs:
+            self.opener.show_icons = kwargs["show_icons"]
+        if hasattr(self.opener, "icon_size") and "icon_size" in kwargs:
+            self.opener.icon_size = kwargs["icon_size"]
+        if hasattr(self.opener, "fallback_icon_key") and "fallback_icon_key" in kwargs:
+            self.opener.fallback_icon_key = kwargs["fallback_icon_key"]
+        if (
+            hasattr(self.opener, "use_fallback_icons")
+            and "use_fallback_icons" in kwargs
+        ):
+            self.opener.use_fallback_icons = kwargs["use_fallback_icons"]
+        if hasattr(self.opener, "icon_position") and "icon_position" in kwargs:
+            self.opener.icon_position = kwargs["icon_position"]
+
+        # Clear opener icon cache and refresh
+        if hasattr(self.opener, "_icons"):
+            self.opener._icons.clear()
+
+        if hasattr(self.opener, "refresh_opener"):
+            try:
+                self.opener.refresh_opener(list(self.tab_configs.values()))
+            except Exception as e:
+                print(f"Warning: Opener refresh failed: {e}")
+
+    def get_available_fallback_icons(self) -> dict:
+        """Get all available fallback icons."""
+        return IconManager.get_fallback_icons()
+
+    def add_fallback_icon(self, key: str, icon: str):
+        """Add a custom fallback icon."""
+        IconManager.add_fallback_icon(key, icon)
 
     def cleanup(self):
         """Clean up all resources."""
@@ -602,6 +820,9 @@ class TabManager(ttk.Frame):
                 self.opener.cleanup()
             except:
                 pass
+
+        # Clear icon caches
+        self._tab_icons.clear()
 
         # Clear references
         self.tab_configs.clear()
