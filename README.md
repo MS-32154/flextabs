@@ -816,6 +816,26 @@ tab_manager = TabManager(parent, [config], opener_type="toolbar")
 - tkinter (usually included with Python)
 - Pillow (PIL) for image icon support
 
+## API Reference
+
+For the complete API reference got to [FlexTabs API Documentation](https://ms-32154.github.io/flextabs/) or see the source code.
+
+### Enums
+
+- `TabPosition`: TOP, BOTTOM, LEFT, RIGHT
+- `CloseMode`: ACTIVE_ONLY, ANY_VISIBLE, BOTH
+- `CloseConfirmationType`: NONE, YESNO, WARNING, INFO
+
+### Classes
+
+- `TabConfig`: Tab configuration dataclass
+- `TabContent`: Base class for tab content
+- `TabOpener`: Base class for tab openers
+- `TabManager`: Main tab management widget
+- `IconManager`: Icon loading and caching
+- `TooltipWidget`: Tooltip implementation
+- `ToastNotification`: Notification system
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

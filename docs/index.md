@@ -850,3 +850,7 @@ FlexTabs is designed for single-threaded tkinter applications. If you need to up
 ---
 
 This completes the comprehensive API documentation for FlexTabs. The library provides a robust foundation for building tabbed interfaces in tkinter applications with extensive customization options and professional features.
+
+---
+
+flextabs © 2025 MS-32154. All rights reserved.
