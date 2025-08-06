@@ -844,7 +844,7 @@ If you encounter any issues or have questions, please:
 
 ## Roadmap
 
-- [ x ] Icon support for tabs and buttons
+- [x] Icon support for tabs and buttons
 - [ ] Drag and drop tab reordering
 - [ ] Tab groups and separators
 - [ ] Persistent tab state between sessions
