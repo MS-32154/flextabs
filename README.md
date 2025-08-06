@@ -1,61 +1,79 @@
-[![PyPI version](https://img.shields.io/pypi/v/flextabs.svg)](https://https://pypi.org/project/flextabs/)
+[![PyPI version](https://img.shields.io/pypi/v/flextabs.svg)](https://pypi.org/project/flextabs/)
 [![Python](https://img.shields.io/badge/python-3.7%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/github/license/MS-32154/flextabs.svg)](LICENSE)
 
 # FlexTabs
 
-A flexible and extensible tab manager widget for tkinter applications built on top of `ttk.Notebook`. While `ttk.Notebook` provides the basic tab interface, FlexTabs extends it with multiple tab opening mechanisms (toolbar, sidebar, menu), advanced tab management features, and customizable behavior options.
+A powerful and flexible tab management library for Python tkinter applications that extends `ttk.Notebook` with advanced features like dynamic tab opening/closing, multiple opener styles, keyboard shortcuts, icon support, and state retention.
 
-## Why FlexTabs?
+## Table of Contents
 
-While tkinter's `ttk.Notebook` is great for basic tabbed interfaces, it has limitations:
-- Only supports tabs displayed at the top of the widget
-- No built-in way to dynamically open/close tabs from external UI elements
-- Limited customization for tab opening mechanisms
-- No built-in support for unclosable tabs, confirmations, or notifications
-
-FlexTabs solves these problems by wrapping `ttk.Notebook` with a comprehensive management layer that provides modern tab interface patterns commonly seen in IDEs, browsers, and professional applications. It handles tab state retention after open and close actions. New opened tabs are appended to the end, and opener buttons can manage both opening and switching between opened tabs.
-
-## Architecture
-
-FlexTabs is built as a wrapper around tkinter's `ttk.Notebook` widget:
-
-```
-┌─────────────────────────────────────────┐
-│              TabManager                 │
-│  ┌─────────────┐  ┌─────────────────┐   │
-│  │ TabOpener   │  │  ttk.Notebook   │   │
-│  │ (Sidebar/   │  │                 │   │
-│  │ Toolbar/    │  │ ┌─────────────┐ │   │
-│  │ Menu)       │  │ │ TabContent  │ │   │
-│  │             │  │ │   Frame     │ │   │
-│  │ [Home]      │  │ └─────────────┘ │   │
-│  │ [Settings]  │  │ ┌─────────────┐ │   │
-│  │ [Help]      │  │ │ TabContent  │ │   │
-│  │             │  │ │   Frame     │ │   │
-│  └─────────────┘  │ └─────────────┘ │   │
-│                   └─────────────────┘   │
-└─────────────────────────────────────────┘
-```
-
-- **TabManager**: Main widget that coordinates everything
-- **TabOpener**: External UI elements (sidebar, toolbar, menu) for opening tabs
-- **ttk.Notebook**: The actual tab container (unchanged tkinter behavior)
-- **TabContent**: Your custom content classes that populate each tab
+- [Features](#features)
+  - [Core Features](#core-features)
+  - [Advanced Features](#advanced-features)
+- [Installation](#installation)
+- [Running the Demo](#running-the-demo)
+- [Quick Start](#quick-start)
+- [Core Components](#core-components)
+  - [TabConfig](#tabconfig)
+  - [TabContent](#tabcontent)
+  - [TabManager](#tabmanager)
+- [Opener Types](#opener-types)
+  - [Sidebar Opener](#sidebar-opener)
+  - [Toolbar Opener](#toolbar-opener)
+  - [Menu Opener](#menu-opener)
+- [Close Modes](#close-modes)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Built-in Shortcuts](#built-in-shortcuts)
+  - [Custom Shortcuts](#custom-shortcuts)
+- [Event Callbacks](#event-callbacks)
+- [Runtime Management](#runtime-management)
+  - [Tab Operations](#tab-operations)
+  - [Dynamic Configuration](#dynamic-configuration)
+  - [Icon Management](#icon-management)
+- [Notifications](#notifications)
+- [Advanced Examples](#advanced-examples)
+    - [Custom Tab with Complex UI](#custom-tab-with-complex-uI)
+    - [Multi-Window Application](#multi-window-application)
+    - [Notebook Styling](#notebook-styling)
+- [Error Handling](#error-handling)
+- [Performance Tips](#performance-tips)
+- [Best Practices](#best-practices)
+- [Requirements](#requirements)
+- [Examples](#examples)
+    - [Complete Application Example](#complete-application-example)
+    - [Dynamic Tab Management](#dynamic-tab-management)
+- [Styling and Customization](#styling-and-customization)
+    - [Custom Tooltip Styling](#custom-tooltip-styling)
+    - [TTK Styling and Compatibility](#ttk-styling-and-compatibility)
+    - [Migrating from ttk.Notebook](#migrating-from-ttk.Notebook)
+- [License](#license)
+- [Contributing](#contributing)
+- [Support](#support)
+- [Roadmap](#roadmap)
 
 ## Features
 
-- **Built on ttk.Notebook**: Full compatibility with existing tkinter tab functionality
-- **Multiple Tab Openers**: Toolbar, Sidebar, and Menu-based tab opening
-- **Flexible Tab Management**: Open, close, and switch between tabs programmatically
-- **Customizable Styling**: Configure appearance of tabs, buttons, and notifications
-- **Keyboard Shortcuts**: Built-in shortcuts for tab navigation and custom tab shortcuts
-- **Close Confirmation**: Optional confirmation dialogs before closing tabs
+### Core Features
+
+- **Dynamic Tab Management**: Open and close tabs programmatically with state retention
+- **Multiple Opener Styles**: Toolbar, Sidebar, and Menu-based tab openers
+- **Flexible Close Modes**: Control how and when tabs can be closed
+- **Icon Support**: Full icon support for both tab openers and notebook tabs (images + emoji/text fallbacks)
+- **Keyboard Shortcuts**: Built-in navigation shortcuts plus custom tab shortcuts
+- **State Management**: Automatic tab state tracking and restoration
+- **Event System**: Comprehensive callbacks for tab lifecycle events
 - **Toast Notifications**: Built-in notification system for user feedback
-- **Tooltips**: Hover tooltips for tab buttons
-- **Event Callbacks**: Hook into tab lifecycle events
-- **Runtime Configuration**: Add/remove tabs dynamically
-- **Unclosable Tabs**: Mark tabs as permanent with special styling
+- **Runtime Configuration**: Change settings and add/remove tabs at runtime
+
+### Advanced Features
+
+- **Smart Refresh**: Efficient UI updates that preserve layout and state
+- **Multiple Close Confirmation Types**: None, Yes/No, Warning, or Info dialogs
+- **Unclosable Tabs**: Mark tabs as permanent with visual indicators
+- **Icon Caching**: Automatic icon loading and caching for performance
+- **Tooltip Support**: Rich tooltips for tab openers
+- **Error Handling**: Robust error handling with user-friendly notifications
 
 ## Installation
 
@@ -64,17 +82,18 @@ pip install flextabs
 ```
 
 Or clone the repository:
+
 ```bash
 git clone https://github.com/MS-32154/flextabs.git
 cd flextabs
 pip install -e .
 ```
 
-## Running Tests
+**Dependencies:**
 
-```
-pytest
-```
+- Python 3.8+
+- tkinter (usually included with Python)
+- Pillow (PIL) for image icon support
 
 ## Running the Demo
 
@@ -84,220 +103,436 @@ python3 -m flextabs
 
 ## Quick Start
 
-Here's how you would create tabs with vanilla tkinter vs. FlexTabs:
-
-### Traditional ttk.Notebook approach:
 ```python
 import tkinter as tk
 from tkinter import ttk
-
-root = tk.Tk()
-notebook = ttk.Notebook(root)
-
-# Manually create and add tabs
-frame1 = ttk.Frame(notebook)
-notebook.add(frame1, text="Tab 1")
-tk.Label(frame1, text="Content 1").pack()
-
-frame2 = ttk.Frame(notebook)
-notebook.add(frame2, text="Tab 2")
-tk.Label(frame2, text="Content 2").pack()
-
-notebook.pack(fill=tk.BOTH, expand=True)
-root.mainloop()
-```
-
-### FlexTabs approach:
-```python
-import tkinter as tk
 from flextabs import TabManager, TabConfig, TabContent
 
-class MyTabContent(TabContent):
+# Create your tab content classes
+class HomeTabContent(TabContent):
     def setup_content(self):
-        tk.Label(self.frame, text=f"Content for {self.config.title}").pack()
+        ttk.Label(self.frame, text="Welcome to the Home tab!").pack(pady=20)
 
-# Create main window
+class SettingsTabContent(TabContent):
+    def setup_content(self):
+        ttk.Label(self.frame, text="Settings Configuration").pack(pady=20)
+        # Add a close button
+        self.manager().add_close_button(self.frame, self.tab_id).pack(pady=10)
+
+# Create the main window
 root = tk.Tk()
 root.title("FlexTabs Demo")
 root.geometry("800x600")
 
-# Define tabs with rich configuration
+# Define tab configurations
 tab_configs = [
-    TabConfig("tab1", "Home", MyTabContent, tooltip="Home page"),
-    TabConfig("tab2", "Settings", MyTabContent, closable=False),
-    TabConfig("tab3", "Help", MyTabContent, keyboard_shortcut="<Control-h>"),
+    TabConfig(
+        id="home",
+        title="Home",
+        content_class=HomeTabContent,
+        icon="🏠",  # Emoji icon
+        tooltip="Go to home page",
+        closable=False  # This tab cannot be closed
+    ),
+    TabConfig(
+        id="settings",
+        title="Settings",
+        content_class=SettingsTabContent,
+        icon="⚙️",
+        tooltip="Application settings",
+        keyboard_shortcut="<Control-s>"
+    )
 ]
 
-# Create tab manager with sidebar opener
+# Create the tab manager
 tab_manager = TabManager(
-    root,
+    parent=root,
     tab_configs=tab_configs,
-    opener_type="sidebar",  # External UI for opening tabs
-    opener_config={"position": "left", "width": 200, "title": "Navigation"}
+    opener_type="sidebar",  # or "toolbar", "menu"
+    opener_config={
+        "position": "left",
+        "width": 150,
+        "title": "Navigation"
+    }
 )
 tab_manager.pack(fill=tk.BOTH, expand=True)
+
+# Open the home tab by default
+tab_manager.open_tab("home")
 
 root.mainloop()
 ```
 
-The key difference: FlexTabs separates tab **definition** from tab **opening mechanism**, allowing you to create professional interfaces where tabs can be opened from sidebars, toolbars, menus, or programmatically.
+## Core Components
 
-## Tab Opener Types
+### TabConfig
 
-### 1. Sidebar Opener
-Perfect for navigation-style interfaces with vertical button layout.
+Defines the configuration for each tab:
 
 ```python
-tab_manager = TabManager(
-    parent,
-    tab_configs=tabs,
-    opener_type="sidebar",
-    opener_config={
-        "position": "left",  # or "right"
-        "width": 200,
-        "title": "Navigation",
-        "style": {"bg": "#f0f0f0"}
-    }
+TabConfig(
+    id="unique_id",              # Required: Unique identifier
+    title="Tab Title",           # Required: Display title
+    content_class=YourContent,   # Required: TabContent subclass
+    icon="🏠",                   # Optional: Icon (emoji, text, or file path)
+    tooltip="Helpful text",      # Optional: Tooltip text
+    closable=True,               # Optional: Whether tab can be closed
+    keyboard_shortcut="<Control-t>",  # Optional: Keyboard shortcut
+    data={"key": "value"}        # Optional: Custom data dictionary
 )
 ```
 
-### 2. Toolbar Opener
-Great for ribbon-style interfaces with horizontal or vertical button layouts.
+#### Icon Support
+
+FlexTabs supports multiple icon types:
 
 ```python
-tab_manager = TabManager(
-    parent,
-    tab_configs=tabs,
-    opener_type="toolbar",
-    opener_config={
-        "position": "top",  # "top", "bottom", "left", "right"
-        "layout": "horizontal",  # or "vertical"
-        "style": {"bg": "#e0e0e0"},
-        "button_style": {"width": 15}
-    }
-)
+# Emoji/text icons (≤4 characters)
+icon="🏠"
+icon="⚙️"
+icon="📊"
+
+# File paths to images (PNG, JPEG, etc.)
+icon="/path/to/icon.png"
+icon="resources/settings.ico"
+
+# Context-specific icons
+icon={
+    "opener": "🏠",              # Icon for tab opener
+    "tab": "/path/to/home.png",  # Icon for notebook tab
+    "default": "📄"              # Fallback
+}
 ```
 
-### 3. Menu Opener
-Integrates tabs into the application's menu bar.
+### TabContent
+
+Base class for all tab content. Inherit from this to create your tabs:
 
 ```python
-tab_manager = TabManager(
-    parent,
-    tab_configs=tabs,
-    opener_type="menu",
-    opener_config={
-        "menu_title": "Windows"  # Menu name in menu bar
-    }
-)
-```
-
-## Tab Configuration
-
-### TabConfig Parameters
-
-```python
-from flextabs import TabConfig
-
-tab_config = TabConfig(
-    id="unique_id",              # Unique identifier
-    title="Tab Title",           # Display name
-    content_class=MyTabContent,  # TabContent subclass
-    icon="path/to/icon.png",     # Optional icon (not yet implemented)
-    tooltip="Helpful tooltip",   # Hover tooltip text
-    closable=True,              # Whether tab can be closed
-    keyboard_shortcut="<Control-t>",  # Keyboard shortcut
-    data={"key": "value"}       # Custom data dictionary
-)
-```
-
-### Creating Tab Content
-
-Extend the `TabContent` class to create your tab content:
-
-```python
-from flextabs import TabContent
-import tkinter as tk
-from tkinter import ttk
-
 class MyTabContent(TabContent):
     def setup_content(self):
-        """Required: Setup your tab's UI here"""
-        # Access tab configuration
-        title = self.config.title
-        custom_data = self.config.data
-        
-        # Create UI elements
-        ttk.Label(self.frame, text=f"Welcome to {title}").pack(pady=10)
-        
-        # Access the tab manager if needed
-        manager = self.get_manager()
-        close_btn = manager.add_close_button(self.frame, self.tab_id)
-        close_btn.pack(pady=5)
-    
+        """Required: Set up your tab's UI here"""
+        ttk.Label(self.frame, text="My content").pack()
+
     def on_tab_focus(self):
-        """Optional: Called when tab gains focus"""
+        """Optional: Called when tab becomes active"""
         print(f"Tab {self.tab_id} focused")
-    
+
     def on_tab_blur(self):
         """Optional: Called when tab loses focus"""
         print(f"Tab {self.tab_id} blurred")
-    
+
     def on_tab_close(self) -> bool:
-        """Optional: Called before tab closes. Return False to prevent closing"""
-        # Ask user for confirmation, save data, etc.
+        """Optional: Called before closing. Return False to prevent."""
         return True  # Allow closing
-    
+
     def cleanup(self):
-        """Optional: Clean up resources when tab is destroyed"""
-        super().cleanup()  # Always call parent cleanup
+        """Optional: Clean up resources"""
+        super().cleanup()
 ```
 
-## Advanced Configuration
+### TabManager
 
-### Close Behavior
+The main component that orchestrates everything:
 
 ```python
-from flextabs import TabManager, CloseMode, CloseConfirmationType
-
-tab_manager = TabManager(
-    parent,
-    tab_configs=tabs,
-    
-    # Close button behavior
+TabManager(
+    parent=root,                    # Parent widget
+    tab_configs=[...],              # List of TabConfig objects
+    opener_type="sidebar",          # "toolbar", "sidebar", or "menu"
+    opener_config={},               # Opener-specific configuration
     close_button_style="right_click",  # "right_click", "double_click", "both"
-    
-    # Close mode - which tabs can be closed with click
-    close_mode=CloseMode.ACTIVE_ONLY,  # ACTIVE_ONLY, ANY_VISIBLE, BOTH
-    
-    # Close confirmation
-    close_confirmation=True,
-    close_confirmation_type=CloseConfirmationType.YESNO,  # NONE, YESNO, WARNING, INFO
-    
-    # Keyboard shortcuts
-    enable_keyboard_shortcuts=True
+    close_confirmation=False,       # Enable close confirmations
+    close_confirmation_type="none", # "none", "yesno", "warning", "info"
+    close_mode="active_only",       # "active_only", "any_visible", "both"
+    enable_keyboard_shortcuts=True, # Enable built-in shortcuts
+    show_notebook_icons=True,       # Show icons in notebook tabs
+    notebook_icon_size=(16, 16),    # Icon size for notebook tabs
+    **kwargs                        # Additional ttk.Frame options
 )
 ```
 
-### Event Callbacks
+## Opener Types
+
+### Sidebar Opener
+
+Creates a sidebar with navigation buttons:
 
 ```python
-def on_tab_opened(tab_id: str):
+opener_config = {
+    "position": "left",      # "left" or "right"
+    "width": 150,           # Sidebar width
+    "title": "Navigation",  # Optional title
+    "style": {},           # ttk.Frame styling
+    "button_style": {},    # Button styling
+    "show_icons": True,    # Show icons on buttons
+    "icon_size": (16, 16), # Icon size
+    "icon_position": "left" # "left", "right", "top", "bottom"
+}
+```
+
+### Toolbar Opener
+
+Creates a horizontal or vertical toolbar:
+
+```python
+opener_config = {
+    "position": "top",        # "top", "bottom", "left", "right"
+    "layout": "horizontal",   # "horizontal" or "vertical"
+    "style": {},             # ttk.Frame styling
+    "button_style": {},      # Button styling
+    "show_icons": True,      # Show icons on buttons
+    "icon_size": (16, 16),   # Icon size
+    "icon_position": "left"  # Icon position relative to text
+}
+```
+
+### Menu Opener
+
+Creates a menu in the application's menu bar:
+
+```python
+opener_config = {
+    "menu_title": "Tabs",    # Menu title in menu bar
+    "show_icons": True,      # Show icons in menu items
+    # Note: Icons are limited to emoji/text for menus
+}
+```
+
+## Close Modes
+
+Control how tabs can be closed:
+
+- **`active_only`**: Only the currently active tab can be closed
+- **`any_visible`**: Any visible tab can be closed by clicking
+- **`both`**: Active tab closes normally, others require Ctrl+click
+
+## Keyboard Shortcuts
+
+### Built-in Shortcuts
+
+- `Ctrl+W`: Close current tab
+- `Ctrl+Tab`: Next tab
+- `Ctrl+Shift+Tab`: Previous tab
+- `Ctrl+1` through `Ctrl+9`: Select tab by index
+
+### Custom Shortcuts
+
+Add shortcuts to individual tabs:
+
+```python
+TabConfig(
+    id="settings",
+    title="Settings",
+    content_class=SettingsContent,
+    keyboard_shortcut="<Control-comma>"  # Ctrl+,
+)
+```
+
+## Event Callbacks
+
+Set up callbacks to respond to tab events:
+
+```python
+def on_tab_opened(tab_id):
     print(f"Tab {tab_id} opened")
 
-def on_tab_closed(tab_id: str):
+def on_tab_closed(tab_id):
     print(f"Tab {tab_id} closed")
 
-def on_tab_switched(new_tab_id: str, old_tab_id: str):
+def on_tab_switched(new_tab_id, old_tab_id):
     print(f"Switched from {old_tab_id} to {new_tab_id}")
 
-def on_tab_error(tab_id: str, error: Exception):
+def on_tab_error(tab_id, error):
     print(f"Error in tab {tab_id}: {error}")
 
 tab_manager.on_tab_opened = on_tab_opened
 tab_manager.on_tab_closed = on_tab_closed
 tab_manager.on_tab_switched = on_tab_switched
 tab_manager.on_tab_error = on_tab_error
+```
+
+## Runtime Management
+
+### Tab Operations
+
+```python
+# Open/close tabs
+tab_manager.open_tab("settings")
+tab_manager.close_tab("settings")
+
+# Check tab status
+is_open = tab_manager.is_tab_open("settings")
+current_tab = tab_manager.get_current_tab()
+open_tabs = tab_manager.get_open_tabs()
+
+# Select tabs
+tab_manager.select_tab("home")
+
+# Close all tabs
+closed_count = tab_manager.close_all_tabs()
+
+# Get tab content instance
+content = tab_manager.get_tab_content("settings")
+```
+
+### Dynamic Configuration
+
+```python
+# Add new tab at runtime
+new_tab = TabConfig(
+    id="reports",
+    title="Reports",
+    content_class=ReportsContent
+)
+tab_manager.add_tab_config(new_tab)
+
+# Remove tab
+tab_manager.remove_tab_config("reports")
+
+# Change close mode
+tab_manager.set_close_mode("any_visible")
+```
+
+### Icon Management
+
+```python
+# Refresh all icons (useful after changing icon files)
+tab_manager.refresh_tab_icons()
+
+# Update icon settings
+tab_manager.set_notebook_icon_settings(
+    show_icons=True,
+    icon_size=(20, 20),
+    fallback_icon_key="default"
+)
+
+tab_manager.set_opener_icon_settings(
+    show_icons=True,
+    icon_size=(18, 18),
+    icon_position="top"
+)
+
+# Add custom fallback icons
+tab_manager.add_fallback_icon("custom", "🔧")
+available_icons = tab_manager.get_available_fallback_icons()
+```
+
+## Notifications
+
+Show toast notifications to users:
+
+```python
+# Basic notification
+tab_manager.show_notification("Tab opened successfully")
+
+# Styled notifications
+tab_manager.show_notification(
+    "Settings saved!",
+    toast_type="success",  # "info", "warning", "error", "success"
+    duration=3000  # milliseconds
+)
+```
+
+## Advanced Examples
+
+### Custom Tab with Complex UI
+
+```python
+class DataAnalysisTab(TabContent):
+    def setup_content(self):
+        # Create a complex interface
+        main_frame = ttk.Frame(self.frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Toolbar
+        toolbar = ttk.Frame(main_frame)
+        toolbar.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Button(toolbar, text="Load Data").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(toolbar, text="Export").pack(side=tk.LEFT, padx=(0, 5))
+
+        # Content area with notebook
+        content_nb = ttk.Notebook(main_frame)
+        content_nb.pack(fill=tk.BOTH, expand=True)
+
+        # Data tab
+        data_frame = ttk.Frame(content_nb)
+        content_nb.add(data_frame, text="Raw Data")
+
+        # Charts tab
+        chart_frame = ttk.Frame(content_nb)
+        content_nb.add(chart_frame, text="Charts")
+
+    def on_tab_focus(self):
+        # Refresh data when tab becomes active
+        self.refresh_data()
+
+    def on_tab_close(self):
+        # Ask user to save unsaved changes
+        if self.has_unsaved_changes():
+            from tkinter import messagebox
+            result = messagebox.askyesnocancel(
+                "Unsaved Changes",
+                "Save changes before closing?",
+                parent=self.frame
+            )
+            if result is None:  # Cancel
+                return False
+            elif result:  # Yes
+                self.save_changes()
+        return True
+
+    def refresh_data(self):
+        # Implementation here
+        pass
+
+    def has_unsaved_changes(self):
+        # Check for unsaved changes
+        return False
+
+    def save_changes(self):
+        # Save changes
+        pass
+```
+
+### Multi-Window Application
+
+```python
+class MultiWindowApp:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Multi-Window App")
+
+        # Create main tab manager
+        self.main_tabs = TabManager(
+            parent=self.root,
+            tab_configs=self.get_main_tab_configs(),
+            opener_type="toolbar",
+            opener_config={"position": "top"}
+        )
+        self.main_tabs.pack(fill=tk.BOTH, expand=True)
+
+        # Set up callbacks
+        self.main_tabs.on_tab_opened = self.on_main_tab_opened
+
+    def get_main_tab_configs(self):
+        return [
+            TabConfig("home", "Home", HomeTab, icon="🏠", closable=False),
+            TabConfig("projects", "Projects", ProjectsTab, icon="📁"),
+            TabConfig("settings", "Settings", SettingsTab, icon="⚙️")
+        ]
+
+    def on_main_tab_opened(self, tab_id):
+        if tab_id == "projects":
+            # When projects tab opens, populate with recent projects
+            content = self.main_tabs.get_tab_content(tab_id)
+            if content:
+                content.load_recent_projects()
+
+    def run(self):
+        self.main_tabs.open_tab("home")
+        self.root.mainloop()
 ```
 
 ### Notebook Styling
@@ -309,10 +544,10 @@ import tkinter.ttk as ttk
 
 # Create custom notebook style
 style = ttk.Style()
-style.configure("Custom.TNotebook", 
+style.configure("Custom.TNotebook",
                background="lightgray",
                tabmargins=[0, 5, 0, 0])
-style.configure("Custom.TNotebook.Tab", 
+style.configure("Custom.TNotebook.Tab",
                padding=[20, 10],
                background="white")
 
@@ -327,65 +562,40 @@ tab_manager = TabManager(
 ```
 
 You can also access the underlying `ttk.Notebook` directly:
+
 ```python
 # Access the internal ttk.Notebook for advanced customization
 internal_notebook = tab_manager.notebook
 internal_notebook.configure(width=500, height=300)
 ```
 
-## API Reference
+## Error Handling
 
-### TabManager Methods
+FlexTabs includes comprehensive error handling:
 
-#### Tab Management
-- `open_tab(tab_id: str) -> bool` - Open a specific tab
-- `close_tab(tab_id: str) -> bool` - Close a specific tab
-- `select_tab(tab_id: str) -> bool` - Select/focus a specific tab
-- `close_all_tabs() -> int` - Close all open tabs
+```python
+# Errors are automatically caught and can be handled via callback
+def handle_tab_error(tab_id, error):
+    print(f"Error in tab {tab_id}: {error}")
+    # Log to file, show user message, etc.
 
-#### Tab Information
-- `is_tab_open(tab_id: str) -> bool` - Check if tab is open
-- `get_open_tabs() -> list[str]` - Get list of open tab IDs
-- `get_current_tab() -> str | None` - Get currently selected tab ID
-- `get_tab_content(tab_id: str) -> TabContent | None` - Get tab content instance
+tab_manager.on_tab_error = handle_tab_error
+```
 
-#### Runtime Configuration
-- `add_tab_config(config: TabConfig)` - Add new tab configuration
-- `remove_tab_config(tab_id: str) -> bool` - Remove tab configuration
-- `set_close_mode(mode: CloseMode)` - Change close mode
-- `get_close_mode() -> CloseMode` - Get current close mode
+## Performance Tips
 
-#### UI Helpers
-- `add_close_button(parent: Widget, tab_id: str) -> ttk.Button` - Add close button to tab content
-- `show_notification(message: str, toast_type: str = "info", duration: int = 2000)` - Show toast notification
+1. **Icon Preloading**: Icons are automatically preloaded and cached
+2. **Smart Refresh**: UI updates use smart refresh to avoid recreating widgets unnecessarily
+3. **Lazy Loading**: Tabs are only created when first opened
+4. **Memory Management**: Proper cleanup prevents memory leaks
 
-#### Cleanup
-- `cleanup()` - Clean up all resources
-- `destroy()` - Destroy the widget
+## Best Practices
 
-### Built-in Keyboard Shortcuts
-
-- `Ctrl+W` - Close current tab
-- `Ctrl+Tab` - Next tab
-- `Ctrl+Shift+Tab` - Previous tab
-- `Ctrl+1-9` - Select tab by index
-- Custom shortcuts defined in `TabConfig.keyboard_shortcut`
-
-### Enums
-
-#### TabPosition
-- `TOP`, `BOTTOM`, `LEFT`, `RIGHT` - Opener positions
-
-#### CloseMode
-- `ACTIVE_ONLY` - Only close currently active tab on click
-- `ANY_VISIBLE` - Close any visible tab on click
-- `BOTH` - Close active tab normally, any tab with Ctrl+click
-
-#### CloseConfirmationType
-- `NONE` - No confirmation
-- `YESNO` - Yes/No dialog
-- `WARNING` - Warning dialog with OK/Cancel
-- `INFO` - Info dialog with OK
+1. **Tab IDs**: Use descriptive, unique IDs for all tabs
+2. **Resource Cleanup**: Always implement `cleanup()` in TabContent subclasses that use resources
+3. **Error Handling**: Implement robust error handling in your TabContent classes
+4. **Icon Sizes**: Use consistent icon sizes for better visual appearance
+5. **Keyboard Shortcuts**: Use standard shortcuts when possible (Ctrl+S for settings, etc.)
 
 ## Examples
 
@@ -398,21 +608,21 @@ from flextabs import TabManager, TabConfig, TabContent
 
 class HomeTab(TabContent):
     def setup_content(self):
-        ttk.Label(self.frame, text="Welcome to the Home Tab!", 
+        ttk.Label(self.frame, text="Welcome to the Home Tab!",
                  font=("TkDefaultFont", 16)).pack(pady=20)
-        
-        ttk.Button(self.frame, text="Open Settings", 
+
+        ttk.Button(self.frame, text="Open Settings",
                   command=lambda: self.get_manager().open_tab("settings")).pack(pady=5)
 
 class SettingsTab(TabContent):
     def setup_content(self):
-        ttk.Label(self.frame, text="Settings", 
+        ttk.Label(self.frame, text="Settings",
                  font=("TkDefaultFont", 14, "bold")).pack(pady=10)
-        
+
         # Some settings widgets
         ttk.Checkbutton(self.frame, text="Enable notifications").pack(pady=2)
         ttk.Checkbutton(self.frame, text="Auto-save").pack(pady=2)
-        
+
         # Add close button
         close_btn = self.get_manager().add_close_button(self.frame, self.tab_id)
         close_btn.pack(pady=10)
@@ -420,16 +630,16 @@ class SettingsTab(TabContent):
 class DataTab(TabContent):
     def setup_content(self):
         self.data_modified = False
-        
+
         ttk.Label(self.frame, text="Data Editor").pack(pady=10)
-        
+
         self.text_area = tk.Text(self.frame, height=10, width=50)
         self.text_area.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
         self.text_area.bind('<KeyPress>', self.on_data_change)
-    
+
     def on_data_change(self, event):
         self.data_modified = True
-    
+
     def on_tab_close(self) -> bool:
         if self.data_modified:
             result = messagebox.askyesnocancel(
@@ -448,10 +658,10 @@ def main():
     root = tk.Tk()
     root.title("FlexTabs Demo Application")
     root.geometry("900x600")
-    
+
     # Define tabs
     tabs = [
-        TabConfig("home", "Home", HomeTab, 
+        TabConfig("home", "Home", HomeTab,
                  tooltip="Application home page",
                  keyboard_shortcut="<Control-h>"),
         TabConfig("settings", "Settings", SettingsTab,
@@ -461,7 +671,7 @@ def main():
                  tooltip="Edit your data here",
                  keyboard_shortcut="<Control-d>"),
     ]
-    
+
     # Create tab manager with sidebar
     tab_manager = TabManager(
         root,
@@ -477,17 +687,17 @@ def main():
         close_confirmation_type="yesno",
         enable_keyboard_shortcuts=True
     )
-    
+
     # Set up event handlers
     def on_tab_opened(tab_id):
         tab_manager.show_notification(f"Opened {tabs[0].title}", "info")
-    
+
     tab_manager.on_tab_opened = on_tab_opened
     tab_manager.pack(fill=tk.BOTH, expand=True)
-    
+
     # Open home tab by default
     tab_manager.open_tab("home")
-    
+
     root.mainloop()
 
 if __name__ == "__main__":
@@ -514,7 +724,7 @@ def create_dynamic_tab(tab_manager, counter):
         content_class=DynamicContent,
         data={"content": f"This is dynamic tab #{counter}"}
     )
-    
+
     tab_manager.add_tab_config(config)
     tab_manager.open_tab(tab_id)
 
@@ -536,13 +746,16 @@ tab_manager.pack(fill=tk.BOTH, expand=True)
 ## Styling and Customization
 
 ### Custom Tooltip Styling
+
 The library includes built-in tooltips that can be customized by modifying the `TooltipWidget` class or by styling the underlying tkinter widgets.
 
 ### Toast Notifications
+
 Built-in toast notification system with four types:
+
 - `info` (blue) - General information
 - `warning` (yellow) - Warnings
-- `error` (red) - Error messages  
+- `error` (red) - Error messages
 - `success` (green) - Success messages
 
 ### TTK Styling and Compatibility
@@ -577,6 +790,7 @@ print(f"All tabs: {notebook.tabs()}")
 If you have existing `ttk.Notebook` code, migration is straightforward:
 
 **Before (ttk.Notebook):**
+
 ```python
 notebook = ttk.Notebook(parent)
 frame = ttk.Frame(notebook)
@@ -585,6 +799,7 @@ notebook.add(frame, text="My Tab")
 ```
 
 **After (FlexTabs):**
+
 ```python
 class MyTab(TabContent):
     def setup_content(self):
@@ -599,30 +814,21 @@ tab_manager = TabManager(parent, [config], opener_type="toolbar")
 
 - Python 3.8+
 - tkinter (usually included with Python)
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- Pillow (PIL) for image icon support
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Changelog
+## Contributing
 
-### Version 0.1.1
-- Initial release
-- Support for Toolbar, Sidebar, and Menu openers
-- Tab lifecycle management
-- Keyboard shortcuts
-- Close confirmation dialogs
-- Toast notifications
-- Tooltip support
-- Runtime tab configuration
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## Support
 
@@ -638,18 +844,16 @@ If you encounter any issues or have questions, please:
 
 ## Roadmap
 
-- [ ] Icon support for tabs and buttons
+- [ x ] Icon support for tabs and buttons
 - [ ] Drag and drop tab reordering
 - [ ] Tab groups and separators
-- [ ] Custom tab close buttons
-- [ ] Persistent tab state
+- [ ] Persistent tab state between sessions
 - [ ] Theme system
 - [ ] Animation effects
 - [ ] Tab overflow handling
 
 ---
 
-**FlexTabs** – Making Tkinter tab management flexible and powerful! 🚀
+**FlexTabs** – Extending `ttk.Notebook` for powerful and flexible tab management in Tkinter.
 
 © 2025 MS-32154. All rights reserved.
-Licensed under the [MIT License](https://opensource.org/licenses/MIT).

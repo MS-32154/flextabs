@@ -1,9 +1,19 @@
-from .flextabs_demo import FlexTabsDemo
+from .flextabs_demo import create_demo_app
 
 if __name__ == "__main__":
     try:
-        demo = FlexTabsDemo()
-        demo.run()
+        app = create_demo_app()
+
+        print("Tab Manager Demo Started!")
+        print("Try these features:")
+        print("• Switch opener types using radio buttons")
+        print("• Use keyboard shortcuts (F1-F4, Ctrl+W, Ctrl+Tab)")
+        print("• Right-click tabs to close them")
+        print("• Try closing the unclosable 'System' tab")
+        print("• Add dynamic tabs from the Home tab")
+        print("• Change settings in the Settings tab")
+
+        app.mainloop()
 
     except ImportError as e:
         print(f"❌ Import Error: {e}")
