@@ -7,7 +7,7 @@ name = "flextabs"
 version = "0.2.0"
 description = "A flexible and extensible tab manager widget for tkinter applications built on top of ttk.Notebook"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.15"
 license = "MIT"
 authors = [
     {name = "MS-32154", email = "msttoffg@gmail.com"}

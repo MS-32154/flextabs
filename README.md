@@ -92,7 +92,7 @@ pip install -e .
 
 **Dependencies:**
 
-- Python 3.8+
+- Python 3.15+
 - tkinter (usually included with Python)
 - Pillow (PIL) for image icon support
 
@@ -813,7 +813,7 @@ tab_manager = TabManager(parent, [config], opener_type="toolbar")
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.15+
 - tkinter (usually included with Python)
 - Pillow (PIL) for image icon support
 

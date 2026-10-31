@@ -13,7 +13,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/MS-32154/flextabs",
     packages=find_packages(),
-    python_requires=">=3.8",
+    python_requires=">=3.15",
     keywords="tkinter, ttk, Notebook, tabs, gui, widget, interface",
     install_requires=[
         "Pillow",
