@@ -12,13 +12,31 @@ from .icons import IconManager
 from .openers import MenuOpener, SidebarOpener, ToolbarOpener
 from .shortcuts import FocusScope, ShortcutRegistry
 from .tab_base import TabConfig, TabContent
+from .theme import (
+    ClosableNotebookStyle,
+    Palette,
+    Theme,
+    palette_from_style,
+    register_palette,
+    resolve_theme,
+)
 from .widgets import ToastNotification
 
 logger = logging.getLogger(__name__)
 
 
 class TabManager(ttk.Frame):
-    """Enhanced tab manager that can be used as a widget or library."""
+    """Tab manager widget: an opener (sidebar/toolbar/menu) plus a notebook.
+
+    ``theme`` selects the look: ``"auto"`` (default) derives flat styles from
+    the app's current ttk theme, ``"light"``/``"dark"`` use preset palettes, a
+    :class:`~flextabs.theme.Palette` uses custom colours, and ``None`` keeps the
+    plain ttk look. FlexTabs never changes the app's global ttk theme itself.
+
+    ``close_button_style`` controls how tabs are closed with the mouse:
+    ``"button"`` shows a close glyph on hovered/selected tabs (right-click also
+    works), ``"right_click"``, ``"double_click"`` or ``"both"``.
+    """
 
     def __init__(
         self,
@@ -38,7 +56,8 @@ class TabManager(ttk.Frame):
         notebook_icon_size: tuple[int, int] = (16, 16),
         show_notebook_icons: bool = True,
         notebook_fallback_icon_key: str = "default",
-        use_notebook_fallback_icons: bool = True,
+        use_notebook_fallback_icons: bool = False,
+        theme: str | Palette | None = "auto",
         **kwargs,
     ):
         super().__init__(parent, **kwargs)
@@ -86,6 +105,7 @@ class TabManager(ttk.Frame):
 
         # Setup UI
         try:
+            self._apply_theme_spec(theme)
             self._setup_opener(opener_type)
             self._setup_notebook()
             self._setup_close_buttons()
@@ -139,49 +159,40 @@ class TabManager(ttk.Frame):
                 tab_icon_paths, self.notebook_icon_size, master=self
             )
 
-    def _load_notebook_icon(self, tab_config: TabConfig) -> ImageTk.PhotoImage | None:
-        """Load icon for notebook tab."""
+    def _notebook_icon_spec(self, tab_config: TabConfig) -> str | None:
+        """Icon spec for a notebook tab: its own icon, else the fallback."""
+        spec = tab_config.get_icon("tab")
+        if not spec and self.use_notebook_fallback_icons:
+            spec = IconManager.get_fallback_icon(self.notebook_fallback_icon_key)
+        return spec
+
+    def _load_notebook_icon(self, tab_config: TabConfig):
+        """Image (or ttk state-mapped image spec) for a notebook tab."""
         if not self.show_notebook_icons:
             return None
-
-        icon_path = tab_config.get_icon("tab")
-        if not icon_path:
+        spec = self._notebook_icon_spec(tab_config)
+        if not spec or IconManager.is_text_icon(spec):
             return None
 
         cache_key = f"tab_{tab_config.id}"
         if cache_key not in self._tab_icons:
-            self._tab_icons[cache_key] = IconManager.get_icon(
-                icon_path, self.notebook_icon_size, master=self
-            )
+            if self.theme is not None:
+                image = self.theme.icon_states(spec, self.notebook_icon_size, self)
+            else:
+                color = ttk.Style(self).lookup("TNotebook.Tab", "foreground")
+                image = IconManager.render(
+                    spec, self.notebook_icon_size, color or "#3f3f46", self
+                )
+            self._tab_icons[cache_key] = image
 
         return self._tab_icons[cache_key]
 
     def _get_tab_text_with_icon(self, tab_config: TabConfig) -> str:
-        """Get tab text, potentially with emoji icon."""
-        text = tab_config.title
-
-        # Add unclosable indicator
-        if not tab_config.closable:
-            text = f"• {text}"
-
-        icon_path = tab_config.get_icon("tab")
-        cache_key = f"tab_{tab_config.id}"
-
-        # Text/emoji icon, otherwise fall back if no image could be loaded
-        if self.show_notebook_icons and IconManager.is_text_icon(icon_path):
-            text = f"{icon_path} {text}"
-        elif (
-            self.show_notebook_icons
-            and self.use_notebook_fallback_icons
-            and self._tab_icons.get(cache_key) is None
-        ):
-            # Use fallback icon if no image was loaded
-            fallback_text = IconManager.get_fallback_text(
-                self.notebook_fallback_icon_key
-            )
-            text = f"{fallback_text} {text}"
-
-        return text
+        """Tab title, prefixed with the icon if it is a text icon."""
+        spec = self._notebook_icon_spec(tab_config)
+        if self.show_notebook_icons and IconManager.is_text_icon(spec):
+            return f"{spec} {tab_config.title}"
+        return tab_config.title
 
     def _setup_opener(self, opener_type: str):
         """Setup the tab opener based on type."""
@@ -200,9 +211,33 @@ class TabManager(ttk.Frame):
         self.opener.set_tab_manager(self)
         self.opener.setup_opener(list(self.tab_configs.values()))
 
+    def _apply_theme_spec(self, spec: str | Palette | None):
+        """Resolve and install the theme (styles are created lazily per theme)."""
+        theme = resolve_theme(spec, self)  # raises before any state changes
+        self._theme_spec = spec
+        self.theme: Theme | None = theme
+        self._close_style: ClosableNotebookStyle | None = None
+        if theme is not None:
+            theme.ensure(self)
+            register_palette(self, theme.palette)
+            self.configure(style=theme.surface_frame)
+            if self.close_button_style == "button" and theme.has_close_glyph:
+                self._close_style = theme.closable_notebook_style(self)
+
+    def _notebook_style(self) -> str:
+        if self.theme is None:
+            return "TabManager.TNotebook"
+        if self._close_style is not None:
+            return self._close_style.style
+        return self.theme.notebook
+
+    def _container_style(self) -> dict[str, str]:
+        """Style kwargs for the frame that hosts each tab's content."""
+        return {"style": self.theme.surface_frame} if self.theme is not None else {}
+
     def _setup_notebook(self):
         """Setup the main notebook widget."""
-        config = {"style": "TabManager.TNotebook"}
+        config = {"style": self._notebook_style()}
         config.update(self.notebook_config)
 
         self.notebook = ttk.Notebook(self, **config)
@@ -211,13 +246,100 @@ class TabManager(ttk.Frame):
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         self.notebook.bind("<Button-1>", lambda e: self._mark_active(), add="+")
         self.notebook.bind("<Destroy>", self._on_notebook_destroy)
+        self.bind("<<ThemeChanged>>", self._on_ttk_theme_changed, add="+")
 
     def _setup_close_buttons(self):
         """Setup close button functionality."""
-        if self.close_button_style in ["right_click", "both"]:
+        style = self.close_button_style
+        if style in ("right_click", "both", "button"):
             self.notebook.bind("<Button-3>", self._on_tab_click)
-        if self.close_button_style in ["double_click", "both"]:
+        if style in ("double_click", "both"):
             self.notebook.bind("<Double-Button-1>", self._on_tab_click)
+        if style == "button":
+            self._glyph_press: str | None = None
+            self.notebook.bind("<ButtonPress-1>", self._on_close_glyph_press, add="+")
+            self.notebook.bind("<ButtonRelease-1>", self._on_close_glyph_click, add="+")
+            self.notebook.bind("<Motion>", self._on_notebook_motion, add="+")
+
+    def _glyph_tab_at(self, x: int, y: int) -> str | None:
+        """Tab whose close glyph is at (x, y), if any."""
+        if self._close_style is None:
+            return None
+        try:
+            element = self.notebook.identify(x, y)
+        except tk.TclError:
+            return None
+        if element != self._close_style.element:
+            return None
+        return self._get_tab_id_at_position(x, y)
+
+    def _on_close_glyph_press(self, event):
+        self._glyph_press = self._glyph_tab_at(event.x, event.y)
+
+    def _on_close_glyph_click(self, event):
+        """Close a tab when its glyph is both pressed and released on."""
+        pressed, self._glyph_press = getattr(self, "_glyph_press", None), None
+        tab_id = self._glyph_tab_at(event.x, event.y)
+        if tab_id is None or tab_id != pressed:
+            return
+        if self.tab_configs[tab_id].closable:  # the lock glyph is informational
+            self.close_tab(tab_id)
+
+    def _on_notebook_motion(self, event):
+        """Show the right glyph (close or lock) on the hovered tab."""
+        if self._close_style is None:
+            return
+        tab_id = self._get_tab_id_at_position(event.x, event.y)
+        closable = self.tab_configs[tab_id].closable if tab_id else None
+        if closable != getattr(self, "_hover_closable", object()):
+            self._hover_closable = closable
+            self._close_style.show_hover(closable, self)
+
+    def _sync_close_glyph(self, tab_id: str | None):
+        """Show the right glyph (close or lock) on the selected tab."""
+        if self._close_style is None:
+            return
+        closable = self.tab_configs[tab_id].closable if tab_id else None
+        self._close_style.show_selected(closable, self)
+
+    def _on_ttk_theme_changed(self, event=None):
+        """Recreate styles if the app switched ttk theme (or its colours changed).
+
+        ttk also sends <<ThemeChanged>> whenever any style is configured, so
+        only react to real changes.
+        """
+        if self._is_destroyed or self.theme is None:
+            return
+        if (
+            self._theme_spec == "auto"
+            and palette_from_style(self) != self.theme.palette
+        ):
+            self.set_theme("auto")
+            return
+        self.theme.ensure(self)  # no-op unless the ttk theme name changed
+        if self._close_style is not None:
+            self._close_style.ensure(self)
+
+    def set_theme(self, theme: str | Palette | None):
+        """Switch the FlexTabs look at runtime (see the ``theme`` argument)."""
+        if self._is_destroyed:
+            return
+        self._apply_theme_spec(theme)
+        if self.theme is None:
+            self.configure(style="TFrame")
+        self.notebook.configure(
+            style=self.notebook_config.get("style", self._notebook_style())
+        )
+        for state in self.tab_states.values():
+            if state["tab_object"] is not None:
+                state["tab_object"].configure(
+                    style=self._container_style().get("style", "TFrame")
+                )
+        # Re-tint only this manager's icons (other managers keep their caches)
+        self._tab_icons.clear()
+        self._rebuild_opener()
+        self._update_notebook_tabs()
+        self._sync_close_glyph(self.get_current_tab())
 
     def _setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts for tab navigation.
@@ -357,6 +479,8 @@ class TabManager(ttk.Frame):
                     self._handle_tab_error(old_tab_id, e)
 
         self._current_tab_id = new_tab_id
+        self._notify_current(new_tab_id)
+        self._sync_close_glyph(new_tab_id)
         if new_tab_id:
             self._mark_active()
             new_content = self.tab_states[new_tab_id]["content_instance"]
@@ -443,7 +567,7 @@ class TabManager(ttk.Frame):
     def _create_tab(self, tab_id: str, state: dict, config: TabConfig) -> bool:
         """Create a new tab with icon support."""
         # Create tab container and content
-        state["tab_object"] = ttk.Frame(self.notebook)
+        state["tab_object"] = ttk.Frame(self.notebook, **self._container_style())
 
         try:
             state["content_instance"] = config.content_class(
@@ -475,6 +599,7 @@ class TabManager(ttk.Frame):
 
         # Select the new tab
         self.notebook.select(state["tab_object"])
+        self._sync_close_glyph(tab_id)
 
         # Update opener and fire event. The tab is open at this point, so
         # errors here are reported but do not count as an open failure.
@@ -482,6 +607,14 @@ class TabManager(ttk.Frame):
         self._fire_callback(self.on_tab_opened, tab_id, tab_id)
 
         return True
+
+    def _notify_current(self, tab_id: str | None):
+        """Tell the opener which tab is selected, reporting any error."""
+        if hasattr(self.opener, "update_current_tab"):
+            try:
+                self.opener.update_current_tab(tab_id)
+            except Exception as e:  # noqa: BLE001 - opener may be user code
+                self._handle_tab_error(tab_id or "unknown", e)
 
     def _notify_opener(self, tab_id: str, is_open: bool):
         """Tell the opener about a tab state change, reporting any error."""
@@ -598,9 +731,15 @@ class TabManager(ttk.Frame):
         if not config.closable:
             raise ValueError(f"Tab '{tab_id}' is not closable")
 
-        return ttk.Button(
-            parent, text="✕ Close", command=lambda: self.close_tab(tab_id)
+        button = ttk.Button(
+            parent, text="Close", command=lambda: self.close_tab(tab_id)
         )
+        color = self.theme.palette.text if self.theme else "#3f3f46"
+        icon = IconManager.get_builtin_icon("close", 14, color, parent)
+        if icon is not None:
+            button.configure(image=icon, compound="left")
+            button.image = icon
+        return button
 
     # Public API methods
     def is_tab_open(self, tab_id: str) -> bool:
@@ -617,10 +756,11 @@ class TabManager(ttk.Frame):
 
     def get_current_tab(self) -> str | None:
         """Get the currently selected tab ID (read live from the notebook)."""
-        if self._is_destroyed:
+        notebook = getattr(self, "notebook", None)
+        if self._is_destroyed or notebook is None:
             return None
         try:
-            selected = self.notebook.select()
+            selected = notebook.select()
         except tk.TclError:
             return None
         return self._get_tab_id_by_widget(selected) if selected else None
@@ -721,6 +861,8 @@ class TabManager(ttk.Frame):
         # Clear opener icons if it has them
         if hasattr(self.opener, "_icons"):
             self.opener._icons.clear()
+        if self.theme is not None:
+            self.theme.ensure(self)
 
         # Preload icons again
         self._preload_icons()
@@ -729,7 +871,10 @@ class TabManager(ttk.Frame):
         if not self._refresh_opener():
             self._rebuild_opener()
 
-        # Update existing notebook tabs without changing their order
+        self._update_notebook_tabs()
+
+    def _update_notebook_tabs(self):
+        """Re-apply icon and text to open notebook tabs, keeping their order."""
         for tab_id, state in self.tab_states.items():
             if state["opened"] and state["tab_object"] is not None:
                 config = self.tab_configs[tab_id]
@@ -817,8 +962,15 @@ class TabManager(ttk.Frame):
             self._setup_opener(opener_type)
         except Exception:
             logger.exception("Could not rebuild %r opener", opener_type)
+        # The new opener packed itself after the notebook, which had already
+        # claimed the space; move the notebook back to the end of the order.
+        notebook = getattr(self, "notebook", None)
+        if notebook is not None:
+            notebook.pack_forget()
+            notebook.pack(fill=tk.BOTH, expand=True)
         for tab_id in self.get_open_tabs():
             self._notify_opener(tab_id, True)
+        self._notify_current(self.get_current_tab())
 
     def get_available_fallback_icons(self) -> dict[str, str]:
         """Get all available fallback icons."""

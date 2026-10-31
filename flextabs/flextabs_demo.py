@@ -1,620 +1,470 @@
-import os
+"""FlexTabs demo application (run with ``python -m flextabs``)."""
+
 import random
-import tempfile
+import time
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 from .enums import CloseConfirmationType, CloseMode
+from .icons import IconManager
 from .tab_base import TabConfig, TabContent
-
-# Import your tab manager components
 from .tab_manager import TabManager
+from .theme import Theme, apply_app_theme, palette_for
+from .widgets import ToastNotification
+
+# --- shared helpers --------------------------------------------------------------
 
 
-def create_demo_icons():
-    """Create compact demo icon files to show difference from emoji."""
-    icons_dir = tempfile.mkdtemp(prefix="tab_icons_")
-    try:
-        from PIL import Image, ImageDraw
-
-        # Opener icons (rectangular, for buttons)
-        opener_configs = [
-            ("home_opener.png", "#3498db", "rect"),
-            ("settings_opener.png", "#95a5a6", "gear"),
-            ("data_opener.png", "#9b59b6", "chart"),
-            ("tools_opener.png", "#f39c12", "tool"),
-        ]
-
-        # Tab icons (square, for notebook tabs)
-        tab_configs = [
-            ("home_tab.png", "#2980b9", "house"),
-            ("settings_tab.png", "#7f8c8d", "cog"),
-            ("data_tab.png", "#8e44ad", "graph"),
-            ("tools_tab.png", "#e67e22", "wrench"),
-        ]
-
-        def draw_simple_icon(draw, size, icon_type, color):
-            w, h = size
-            if icon_type == "rect":
-                draw.rectangle(
-                    [2, 2, w - 3, h - 3], outline="white", width=1, fill=color
-                )
-            elif icon_type in ["gear", "cog"]:
-                # Simple gear shape
-                draw.ellipse([3, 3, w - 4, h - 4], outline="white", width=1, fill=color)
-                draw.rectangle([w // 2 - 1, 1, w // 2 + 1, h - 2], fill="white")
-                draw.rectangle([1, h // 2 - 1, w - 2, h // 2 + 1], fill="white")
-            elif icon_type in ["chart", "graph"]:
-                # Simple bar chart
-                draw.rectangle([2, h - 4, 5, h - 1], fill="white")
-                draw.rectangle([6, h - 7, 9, h - 1], fill="white")
-                draw.rectangle([10, h - 5, 13, h - 1], fill="white")
-            elif icon_type in ["tool", "wrench"]:
-                # Simple tool shape
-                draw.rectangle([3, 2, 6, h - 3], fill="white")
-                draw.rectangle([2, h - 5, 7, h - 2], fill="white")
-            else:
-                draw.rectangle([2, 2, w - 3, h - 3], outline="white", width=1)
-
-        # Create opener icons (20x16)
-        for filename, color, shape in opener_configs:
-            img = Image.new("RGB", (20, 16), color)
-            draw = ImageDraw.Draw(img)
-            draw_simple_icon(draw, (20, 16), shape, color)
-            img.save(os.path.join(icons_dir, filename))
-
-        # Create tab icons (16x16)
-        for filename, color, shape in tab_configs:
-            img = Image.new("RGB", (16, 16), color)
-            draw = ImageDraw.Draw(img)
-            draw_simple_icon(draw, (16, 16), shape, color)
-            img.save(os.path.join(icons_dir, filename))
-
-        print(f"📁 Created demo icons in: {icons_dir}")
-        return icons_dir
-
-    except ImportError:
-        print("⚠️ PIL not available, using emoji icons only")
-        return None
+def _fonts(widget: tk.Misc) -> dict[str, tkfont.Font]:
+    """Heading/subheading fonts derived from the default UI font."""
+    base = tkfont.nametofont("TkDefaultFont", root=widget).actual()
+    family, size = base["family"], base["size"]
+    return {
+        "title": tkfont.Font(root=widget, family=family, size=size + 7, weight="bold"),
+        "section": tkfont.Font(
+            root=widget, family=family, size=size + 1, weight="bold"
+        ),
+    }
 
 
-# Sample tab content classes
-class HomeTab(TabContent):
+def icon_button(parent, text, icon, command, style="TButton") -> ttk.Button:
+    """A ttk button with a built-in icon tinted for the current palette."""
+    palette = palette_for(parent)
+    color = palette.on_accent if style == "Accent.TButton" else palette.text
+    image = IconManager.get_builtin_icon(icon, 16, color, parent)
+    button = ttk.Button(
+        parent,
+        text=text,
+        command=command,
+        style=style,
+        image=image or "",
+        compound="left",
+    )
+    button.image = image
+    return button
+
+
+class Page(TabContent):
+    """Content page with a title, a muted subtitle and a padded body."""
+
+    title = ""
+    subtitle = ""
+
     def setup_content(self):
-        ttk.Label(
-            self.frame,
-            text="🏠 Welcome to Tab Manager Demo",
-            font=("Arial", 16, "bold"),
-        ).pack(pady=20)
-
-        info = """Features demonstrated:
-• Multiple opener types (sidebar, toolbar, menu)
-• Icon support (emoji + image files)
-• Keyboard shortcuts (Ctrl+1-9, Ctrl+W, Ctrl+Tab)
-• Close confirmation dialogs
-• Toast notifications
-• Runtime tab management"""
-
-        ttk.Label(self.frame, text=info, justify="left").pack(pady=10)
-
-        # Demo buttons
-        btn_frame = ttk.Frame(self.frame)
-        btn_frame.pack(pady=20)
-
-        ttk.Button(
-            btn_frame,
-            text="🎉 Success Toast",
-            command=lambda: self.show_toast("success"),
-        ).pack(side="left", padx=2)
-        ttk.Button(
-            btn_frame,
-            text="⚠️ Warning Toast",
-            command=lambda: self.show_toast("warning"),
-        ).pack(side="left", padx=2)
-        ttk.Button(
-            btn_frame, text="❌ Error Toast", command=lambda: self.show_toast("error")
-        ).pack(side="left", padx=2)
-
-        btn_frame2 = ttk.Frame(self.frame)
-        btn_frame2.pack(pady=5)
-
-        ttk.Button(
-            btn_frame2, text="⭐ Add Dynamic Tab", command=self.add_dynamic_tab
-        ).pack(side="left", padx=5)
-        ttk.Button(
-            btn_frame2, text="🗑️ Remove Random Tab", command=self.remove_random_tab
-        ).pack(side="left", padx=5)
-        ttk.Button(
-            btn_frame2, text="📊 Toast Queue Demo", command=self.toast_queue_demo
-        ).pack(side="left", padx=5)
-
-    def show_toast(self, toast_type):
-        manager = self.get_manager()
-        if manager:
-            messages = {
-                "success": "✅ Operation completed successfully!",
-                "warning": "⚠️ This is a warning message",
-                "error": "❌ An error occurred during processing",
-                "info": "ℹ️ Here's some information for you",
-            }
-            manager.show_notification(
-                messages.get(toast_type, "Demo notification"), toast_type
+        fonts = _fonts(self.frame)
+        self.section_font = fonts["section"]
+        self.frame.configure(padding=(28, 24))
+        ttk.Label(self.frame, text=self.page_title(), font=fonts["title"]).pack(
+            anchor="w"
+        )
+        if self.subtitle:
+            ttk.Label(self.frame, text=self.subtitle, style="Muted.TLabel").pack(
+                anchor="w", pady=(4, 12)
             )
+        self.build(self.frame)
+
+    def page_title(self) -> str:
+        return self.title
+
+    def build(self, body: ttk.Frame):
+        raise NotImplementedError
+
+    def section(self, parent: tk.Misc, text: str) -> ttk.Frame:
+        ttk.Label(parent, text=text, font=self.section_font).pack(
+            anchor="w", pady=(16, 6)
+        )
+        frame = ttk.Frame(parent)
+        frame.pack(fill="x", anchor="w")
+        return frame
+
+
+# --- pages -------------------------------------------------------------------------
+
+
+class HomeTab(Page):
+    title = "Welcome"
+    subtitle = "A flexible tab manager for tkinter applications."
+
+    def build(self, body):
+        features = self.section(body, "What to try")
+        for line in (
+            "Switch between sidebar, toolbar and menu openers in the header",
+            "Toggle light and dark mode with the button in the header",
+            "Close tabs with their close button, Ctrl+W, or a right-click",
+            "Move between tabs with Ctrl+Tab and Ctrl+1 to Ctrl+9",
+        ):
+            ttk.Label(features, text=f"–  {line}").pack(anchor="w", pady=1)
+
+        notify = self.section(body, "Notifications")
+        for kind in ("info", "success", "warning", "error"):
+            icon_button(
+                notify,
+                kind.title(),
+                ToastNotification.ICONS[kind],
+                lambda k=kind: self.show_toast(k),
+            ).pack(side="left", padx=(0, 6))
+
+        tabs = self.section(body, "Tabs at runtime")
+        icon_button(
+            tabs, "Add tab", "plus", self.add_dynamic_tab, style="Accent.TButton"
+        ).pack(side="left", padx=(0, 6))
+        icon_button(tabs, "Remove tab", "trash", self.remove_dynamic_tab).pack(
+            side="left", padx=(0, 6)
+        )
+        icon_button(tabs, "Queued toasts", "bell", self.toast_queue_demo).pack(
+            side="left"
+        )
+
+    def show_toast(self, kind):
+        messages = {
+            "info": "Here is some information.",
+            "success": "Operation completed successfully.",
+            "warning": "This is a warning message.",
+            "error": "Something went wrong while processing.",
+        }
+        self.get_manager().show_notification(messages[kind], kind)
 
     def add_dynamic_tab(self):
         manager = self.get_manager()
-        if manager:
-            tab_id = f"dynamic_{random.randint(1000, 9999)}"
-            icons = ["⭐", "🚀", "💎", "🎯", "🔥", "⚡", "🎨", "🎪"]
-            config = TabConfig(
-                id=tab_id,
-                title=f"Dynamic {tab_id[-4:]}",
-                content_class=DataTab,
-                icon=random.choice(icons),
-                tooltip=f"Dynamically created tab {tab_id[-4:]}",
-            )
-            manager.add_tab_config(config)
-            manager.open_tab(tab_id)
-            manager.show_notification(f"Created tab: {config.title}", "success")
+        tab_id = f"dynamic_{random.randint(1000, 9999)}"
+        config = TabConfig(
+            id=tab_id,
+            title=f"Document {tab_id[-4:]}",
+            content_class=DocumentTab,
+            icon="file-text",
+            tooltip="A tab created at runtime",
+        )
+        manager.add_tab_config(config)
+        manager.open_tab(tab_id)
 
-    def remove_random_tab(self):
+    def remove_dynamic_tab(self):
         manager = self.get_manager()
-        if manager:
-            dynamic_tabs = [
-                tid for tid in manager.tab_configs if tid.startswith("dynamic_")
-            ]
-            if dynamic_tabs:
-                tab_id = random.choice(dynamic_tabs)
-                title = manager.tab_configs[tab_id].title
-                manager.remove_tab_config(tab_id)
-                manager.show_notification(f"Removed tab: {title}", "info")
-            else:
-                manager.show_notification("No dynamic tabs to remove", "warning")
+        dynamic = [t for t in manager.tab_configs if t.startswith("dynamic_")]
+        if not dynamic:
+            manager.show_notification("There are no added tabs to remove.", "warning")
+            return
+        tab_id = dynamic[-1]
+        title = manager.tab_configs[tab_id].title
+        manager.remove_tab_config(tab_id)
+        manager.show_notification(f"Removed {title}.", "info")
 
     def toast_queue_demo(self):
         manager = self.get_manager()
-        if manager:
-            toasts = [
-                ("Starting process...", "info"),
-                ("Processing data...", "info"),
-                ("Warning: Large dataset", "warning"),
-                ("Process completed!", "success"),
-            ]
-            for i, (msg, toast_type) in enumerate(toasts):
-                # Stagger the toasts
-                manager.after(
-                    i * 800, lambda m=msg, t=toast_type: manager.show_notification(m, t)
-                )
+        steps = [
+            ("Starting export...", "info"),
+            ("Large dataset, this may take a moment.", "warning"),
+            ("Export finished.", "success"),
+        ]
+        for message, kind in steps:
+            ToastNotification.show(manager, message, 1400, kind, mode="queued")
 
 
-class SettingsTab(TabContent):
-    def setup_content(self):
-        ttk.Label(self.frame, text="⚙️ Settings Panel", font=("Arial", 14, "bold")).pack(
-            pady=10
-        )
+class SettingsTab(Page):
+    title = "Settings"
+    subtitle = "Change how tabs behave while the app is running."
 
-        # Close mode settings
-        mode_frame = ttk.LabelFrame(self.frame, text="Close Mode")
-        mode_frame.pack(fill="x", padx=10, pady=5)
-
-        self.close_mode_var = tk.StringVar(value="active_only")
-        for mode in ["active_only", "any_visible", "both"]:
+    def build(self, body):
+        manager = self.get_manager()
+        close = self.section(body, "Closing tabs with the mouse")
+        self.close_mode = tk.StringVar(value=manager.get_close_mode().value)
+        for value, label in (
+            ("active_only", "Only the selected tab"),
+            ("any_visible", "Any tab"),
+            ("both", "Selected tab, or any tab with Ctrl held"),
+        ):
             ttk.Radiobutton(
-                mode_frame,
-                text=mode.replace("_", " ").title(),
-                variable=self.close_mode_var,
-                value=mode,
-                command=self.update_close_mode,
-            ).pack(anchor="w")
+                close,
+                text=label,
+                value=value,
+                variable=self.close_mode,
+                command=lambda: manager.set_close_mode(self.close_mode.get()),
+            ).pack(anchor="w", pady=1)
 
-        # Icon settings
-        icon_frame = ttk.LabelFrame(self.frame, text="Icon Settings")
-        icon_frame.pack(fill="x", padx=10, pady=5)
+        icons = self.section(body, "Icons")
+        self.show_icons = tk.BooleanVar(value=manager.show_notebook_icons)
+        ttk.Checkbutton(
+            icons,
+            text="Show icons on tabs",
+            variable=self.show_icons,
+            command=lambda: manager.set_notebook_icon_settings(
+                show_icons=self.show_icons.get()
+            ),
+        ).pack(anchor="w")
 
-        ttk.Button(
-            icon_frame, text="Toggle Notebook Icons", command=self.toggle_icons
-        ).pack(pady=2)
-        ttk.Button(icon_frame, text="Refresh Icons", command=self.refresh_icons).pack(
-            pady=2
-        )
-        ttk.Button(
-            icon_frame, text="🎨 Icon vs Emoji Demo", command=self.demo_icon_types
-        ).pack(pady=2)
+        actions = self.section(body, "This tab")
+        icon_button(
+            actions, "Close settings", "close", lambda: manager.close_tab(self.tab_id)
+        ).pack(side="left")
 
-        # Dynamic actions
-        action_frame = ttk.LabelFrame(self.frame, text="Dynamic Actions")
-        action_frame.pack(fill="x", padx=10, pady=5)
 
-        ttk.Button(
-            action_frame, text="🎲 Randomize Tab Order", command=self.randomize_tabs
-        ).pack(pady=2)
-        ttk.Button(
-            action_frame, text="📢 Broadcast Message", command=self.broadcast_message
-        ).pack(pady=2)
+class DataTab(Page):
+    title = "Data"
+    subtitle = "Live information about this tab manager."
 
-        # Close button
-        ttk.Button(
-            self.frame,
-            text="Close This Tab",
-            command=lambda: self.get_manager().close_tab(self.tab_id),
-        ).pack(pady=10)
+    def build(self, body):
+        columns = ("Property", "Value")
+        self.tree = ttk.Treeview(body, columns=columns, show="headings", height=6)
+        for col, width in zip(columns, (180, 360), strict=True):
+            self.tree.heading(col, text=col, anchor="w")
+            self.tree.column(col, width=width, anchor="w")
+        self.tree.pack(fill="x", pady=(8, 12))
+        icon_button(body, "Refresh", "refresh", self.refresh).pack(anchor="w")
+        self.refresh()
 
-    def update_close_mode(self):
+    def on_tab_focus(self):
+        self.refresh()
+
+    def refresh(self):
         manager = self.get_manager()
-        if manager:
-            manager.set_close_mode(self.close_mode_var.get())
+        if manager is None:
+            return
+        self.tree.delete(*self.tree.get_children())
+        rows = [
+            ("Open tabs", ", ".join(manager.get_open_tabs()) or "none"),
+            ("Selected tab", manager.get_current_tab() or "none"),
+            ("Close mode", manager.get_close_mode().value),
+            ("Updated", time.strftime("%H:%M:%S")),
+        ]
+        for row in rows:
+            self.tree.insert("", "end", values=row)
 
-    def toggle_icons(self):
-        manager = self.get_manager()
-        if manager:
-            current = manager.show_notebook_icons
-            manager.set_notebook_icon_settings(show_icons=not current)
 
-    def refresh_icons(self):
-        manager = self.get_manager()
-        if manager:
-            manager.refresh_tab_icons()
-            manager.show_notification("Icons refreshed! 🔄", "success")
+class HelpTab(Page):
+    title = "Help"
+    subtitle = "Keyboard shortcuts and mouse controls."
 
-    def demo_icon_types(self):
-        manager = self.get_manager()
-        if manager:
-            # Show difference between emoji and file icons
-            manager.show_notification(
-                "Emoji icons: 🎨 vs File icons: PNG", "info", 3000
+    def build(self, body):
+        rows = [
+            ("Ctrl+1 … Ctrl+9", "Select a tab by position"),
+            ("Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous tab"),
+            ("Ctrl+W", "Close the selected tab"),
+            ("F1 – F4", "Open Help, Home, Settings and Data"),
+            ("Close button / right-click", "Close a tab"),
+        ]
+        table = self.section(body, "Shortcuts")
+        for i, (keys, action) in enumerate(rows):
+            ttk.Label(table, text=keys, font=self.section_font).grid(
+                row=i, column=0, sticky="w", padx=(0, 24), pady=3
             )
-
-    def randomize_tabs(self):
-        manager = self.get_manager()
-        if manager:
-            open_tabs = manager.get_open_tabs()
-            if len(open_tabs) > 1:
-                random.shuffle(open_tabs)
-                # Close all and reopen in random order
-                for tab_id in open_tabs:
-                    if manager.tab_configs[tab_id].closable:
-                        manager.close_tab(tab_id)
-
-                for tab_id in open_tabs[:3]:  # Reopen first 3
-                    manager.open_tab(tab_id)
-
-                manager.show_notification("Tabs randomized! 🎲", "success")
-            else:
-                manager.show_notification("Need more tabs to randomize", "warning")
-
-    def broadcast_message(self):
-        manager = self.get_manager()
-        if manager:
-            messages = [
-                "📢 System broadcast: All tabs updated",
-                "🔄 Configuration synchronized",
-                "✨ Performance optimized",
-            ]
-            msg = random.choice(messages)
-            manager.show_notification(msg, "info", 2500)
-
-
-class DataTab(TabContent):
-    def setup_content(self):
-        ttk.Label(self.frame, text="📊 Data Viewer", font=("Arial", 14, "bold")).pack(
-            pady=10
-        )
-
-        # Create treeview for data display
-        columns = ("Name", "Type", "Value")
-        tree = ttk.Treeview(self.frame, columns=columns, show="headings", height=8)
-
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=100)
-
-        # Sample data
-        data = [
-            (
-                "tabs_open",
-                "int",
-                str(
-                    len(self.get_manager().get_open_tabs()) if self.get_manager() else 0
-                ),
-            ),
-            (
-                "current_tab",
-                "str",
-                self.get_manager().get_current_tab() if self.get_manager() else "None",
-            ),
-            ("demo_status", "str", "Running"),
-            ("features", "list", "Icons, Shortcuts, Notifications"),
-        ]
-
-        for item in data:
-            tree.insert("", "end", values=item)
-
-        tree.pack(pady=10, padx=10, fill="both", expand=True)
-
-        # Refresh button
-        ttk.Button(
-            self.frame, text="Refresh Data", command=lambda: self.refresh_data(tree)
-        ).pack(pady=5)
-
-    def refresh_data(self, tree):
-        for item in tree.get_children():
-            tree.delete(item)
-
-        manager = self.get_manager()
-        data = [
-            ("tabs_open", "int", str(len(manager.get_open_tabs()) if manager else 0)),
-            ("current_tab", "str", manager.get_current_tab() if manager else "None"),
-            ("timestamp", "str", str(tk.Tk().tk.call("clock", "seconds"))),
-            ("close_mode", "str", str(manager.get_close_mode()) if manager else "None"),
-        ]
-
-        for item in data:
-            tree.insert("", "end", values=item)
-
-
-class HelpTab(TabContent):
-    def setup_content(self):
-        ttk.Label(
-            self.frame, text="❓ Help & Shortcuts", font=("Arial", 14, "bold")
-        ).pack(pady=10)
-
-        help_text = """Keyboard Shortcuts:
-• Ctrl+1-9: Switch to tab by number
-• Ctrl+W: Close current tab
-• Ctrl+Tab: Next tab
-• Ctrl+Shift+Tab: Previous tab
-• F1: Open help (this tab)
-
-Mouse Controls:
-• Right-click tab: Close tab
-• Double-click tab: Close tab (if enabled)
-
-Features:
-• Multiple opener types (sidebar/toolbar/menu)
-• Smart icon support (emoji + image files)
-• Close confirmation dialogs
-• Toast notifications
-• Runtime tab management
-• Keyboard shortcuts
-• Tooltips and styling"""
-
-        text_widget = tk.Text(self.frame, wrap="word", height=15, width=50)
-        text_widget.insert("1.0", help_text)
-        text_widget.config(state="disabled")
-
-        scrollbar = ttk.Scrollbar(
-            self.frame, orient="vertical", command=text_widget.yview
-        )
-        text_widget.configure(yscrollcommand=scrollbar.set)
-
-        text_widget.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
-        scrollbar.pack(side="right", fill="y", padx=(0, 10), pady=10)
+            ttk.Label(table, text=action).grid(row=i, column=1, sticky="w", pady=3)
 
     def on_tab_close(self):
         return messagebox.askyesno(
-            "Close Help", "Are you sure you want to close the help tab?"
+            "Close Help", "Close the help tab?", parent=self.frame
         )
 
 
-class UnclosableTab(TabContent):
-    def setup_content(self):
-        ttk.Label(self.frame, text="🔒 System Tab", font=("Arial", 14, "bold")).pack(
-            pady=20
-        )
+class SystemTab(Page):
+    title = "System"
+    subtitle = "This tab cannot be closed."
+
+    def build(self, body):
         ttk.Label(
-            self.frame,
+            body,
             text=(
-                "This tab cannot be closed.\n"
-                "It demonstrates unclosable tab functionality."
+                "Tabs created with closable=False stay open. Trying to close one "
+                "shows a short notice instead."
             ),
-            justify="center",
-        ).pack(pady=10)
+            wraplength=480,
+            justify="left",
+        ).pack(anchor="w", pady=(8, 0))
 
 
-def create_demo_app():
-    root = tk.Tk()
-    root.title("Tab Manager Comprehensive Demo")
-    root.geometry("900x600")
+class DocumentTab(Page):
+    subtitle = "A tab added at runtime."
 
-    # Configure ttk style
-    style = ttk.Style()
-    style.theme_use("clam")
+    def page_title(self) -> str:
+        return self.config.title
 
-    # Create demo icons
-    icons_dir = create_demo_icons()
+    def build(self, body):
+        text = tk.Text(body, height=10, wrap="word", padx=10, pady=10)
+        text.insert("1.0", "You can type here. Close this tab with its close button.")
+        text.pack(fill="both", expand=True, pady=(8, 0))
 
-    # Create tab configurations with mixed icon types
-    tab_configs = [
-        TabConfig(
-            id="home",
-            title="Home",
-            content_class=HomeTab,
-            # Mix emoji (opener) and file icon (tab) if available
-            icon=(
-                {
-                    "opener": "🏠",  # Emoji for opener buttons
-                    "tab": (
-                        os.path.join(icons_dir, "home_tab.png") if icons_dir else "🏠"
-                    ),
-                }
-                if icons_dir
-                else "🏠"
-            ),
-            tooltip="Home dashboard with emoji/file icon demo",
-            keyboard_shortcut="<F2>",
-        ),
-        TabConfig(
-            id="settings",
-            title="Settings",
-            content_class=SettingsTab,
-            icon=(
-                {
-                    "opener": (
-                        os.path.join(icons_dir, "settings_opener.png")
-                        if icons_dir
-                        else "⚙️"
-                    ),
-                    "tab": "⚙️",  # Emoji for tab, file for opener
-                }
-                if icons_dir
-                else "⚙️"
-            ),
-            tooltip="Settings with file/emoji icon demo",
-            keyboard_shortcut="<F3>",
-        ),
-        TabConfig(
-            id="data",
-            title="Data",
-            content_class=DataTab,
-            icon=(
-                {
-                    "opener": "📊",
-                    "tab": (
-                        os.path.join(icons_dir, "data_tab.png") if icons_dir else "📊"
-                    ),
-                }
-                if icons_dir
-                else "📊"
-            ),
-            tooltip="Data viewer with dynamic updates",
-            keyboard_shortcut="<F4>",
-        ),
-        TabConfig(
-            id="help",
-            title="Help",
-            content_class=HelpTab,
-            icon="❓",  # Pure emoji for both contexts
-            tooltip="Help and keyboard shortcuts",
-            keyboard_shortcut="<F1>",
-        ),
-        TabConfig(
-            id="system",
-            title="System",
-            content_class=UnclosableTab,
-            icon=(
-                {
-                    "opener": (
-                        os.path.join(icons_dir, "tools_opener.png")
-                        if icons_dir
-                        else "🔒"
-                    ),
-                    "tab": "🔒",
-                }
-                if icons_dir
-                else "🔒"
-            ),
-            tooltip="System tab (unclosable) - file icon in opener",
-            closable=False,
-        ),
-    ]
 
-    # Create main container
-    main_frame = ttk.Frame(root)
-    main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+# --- application -------------------------------------------------------------------
 
-    # Demo selector frame
-    demo_frame = ttk.LabelFrame(main_frame, text="Demo Configuration")
-    demo_frame.pack(fill="x", pady=(0, 10))
+TAB_CONFIGS = [
+    TabConfig(
+        "home",
+        "Home",
+        HomeTab,
+        icon="home",
+        keyboard_shortcut="<F2>",
+        tooltip="Start here",
+    ),
+    TabConfig(
+        "settings",
+        "Settings",
+        SettingsTab,
+        icon="settings",
+        keyboard_shortcut="<F3>",
+        tooltip="Behaviour settings",
+    ),
+    TabConfig(
+        "data",
+        "Data",
+        DataTab,
+        icon="chart",
+        keyboard_shortcut="<F4>",
+        tooltip="Live manager state",
+    ),
+    TabConfig(
+        "help",
+        "Help",
+        HelpTab,
+        icon="help",
+        keyboard_shortcut="<F1>",
+        tooltip="Shortcuts and controls",
+    ),
+    TabConfig(
+        "system",
+        "System",
+        SystemTab,
+        icon="lock",
+        closable=False,
+        tooltip="Cannot be closed",
+    ),
+]
 
-    # Opener type selection
-    opener_var = tk.StringVar(value="sidebar")
-    ttk.Label(demo_frame, text="Opener Type:").pack(side="left", padx=5)
-    for opener_type in ["sidebar", "toolbar", "menu"]:
-        ttk.Radiobutton(
-            demo_frame, text=opener_type.title(), variable=opener_var, value=opener_type
-        ).pack(side="left", padx=2)
+OPENER_CONFIGS = {
+    "sidebar": {"position": "left", "width": 190, "title": "WORKSPACE"},
+    "toolbar": {"position": "top", "layout": "horizontal"},
+    "menu": {"menu_title": "Tabs"},
+}
 
-    # Create button
-    def create_tab_manager():
-        # Clear existing widgets
-        for widget in tab_container.winfo_children():
+
+class DemoApp:
+    """Header (opener switch + theme toggle) above a TabManager."""
+
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        self.mode = "light"
+        self.palette = apply_app_theme(root, self.mode)
+        self.opener = tk.StringVar(value="sidebar")
+        self.manager: TabManager | None = None
+
+        self.header = ttk.Frame(root)
+        self.header.pack(fill="x")
+        ttk.Frame(root, height=1, style="Divider.TFrame").pack(fill="x")
+        self.body = ttk.Frame(root)
+        self.body.pack(fill="both", expand=True)
+
+        self._build_header()
+        self._apply_chrome()
+        self.build_manager()
+
+    def _build_header(self):
+        fonts = _fonts(self.root)
+        inner = ttk.Frame(self.header, padding=(16, 10))
+        inner.pack(fill="x")
+        self.header_inner = inner
+
+        ttk.Label(
+            inner, text="FlexTabs", font=fonts["section"], style="Header.TLabel"
+        ).pack(side="left")
+        ttk.Label(inner, text="demo", style="Header.Muted.TLabel").pack(
+            side="left", padx=(6, 0)
+        )
+
+        self.theme_button = ttk.Button(
+            inner, command=self.toggle_theme, style="Header.Toolbutton", takefocus=False
+        )
+        self.theme_button.pack(side="right")
+
+        switch = ttk.Frame(inner, style="Header.TFrame")
+        switch.pack(side="right", padx=(0, 16))
+        self.switch = switch
+        for value in ("sidebar", "toolbar", "menu"):
+            ttk.Radiobutton(
+                switch,
+                text=value.title(),
+                value=value,
+                variable=self.opener,
+                style="Header.Toolbutton",
+                command=self.build_manager,
+                takefocus=False,
+            ).pack(side="left", padx=1)
+
+    def _apply_chrome(self):
+        """Header colours and the theme toggle icon for the current palette."""
+        p = self.palette
+        Theme(p).ensure(self.root)
+        style = ttk.Style(self.root)
+        style.configure("Divider.TFrame", background=p.border)
+        style.configure("Header.TFrame", background=p.bg)
+        for frame in (self.header, self.header_inner, self.switch):
+            frame.configure(style="Header.TFrame")
+        style.configure("Header.TLabel", background=p.bg, foreground=p.text)
+        style.configure("Header.Muted.TLabel", background=p.bg, foreground=p.text_muted)
+        style.configure(
+            "Header.Toolbutton",
+            background=p.bg,
+            foreground=p.text_muted,
+            padding=(10, 4),
+            relief="flat",
+            borderwidth=1,
+            lightcolor=p.bg,
+            darkcolor=p.bg,
+            bordercolor=p.bg,
+        )
+        style.map(
+            "Header.Toolbutton",
+            background=[("selected", p.surface), ("active", p.hover)],
+            foreground=[("selected", p.text), ("active", p.text)],
+            lightcolor=[("selected", p.surface), ("active", p.hover)],
+            darkcolor=[("selected", p.surface), ("active", p.hover)],
+            bordercolor=[("selected", p.border), ("active", p.hover)],
+        )
+        icon = IconManager.get_builtin_icon(
+            "sun" if p.dark else "moon", 16, p.text, self.root
+        )
+        self.theme_button.configure(image=icon or "", text="" if icon else "Theme")
+        self.theme_button.image = icon
+
+    def toggle_theme(self):
+        self.mode = "dark" if self.mode == "light" else "light"
+        self.palette = apply_app_theme(self.root, self.mode)
+        self._apply_chrome()
+        self.build_manager()
+
+    def build_manager(self):
+        previous = self.manager.get_open_tabs() if self.manager else ["home"]
+        current = self.manager.get_current_tab() if self.manager else "home"
+        for widget in self.body.winfo_children():
             widget.destroy()
 
-        # Opener configurations
-        opener_configs = {
-            "sidebar": {"position": "left", "width": 150, "title": "Navigation"},
-            "toolbar": {"position": "top", "layout": "horizontal"},
-            "menu": {"menu_title": "Tabs"},
-        }
-
-        # Create tab manager
+        opener = self.opener.get()
         manager = TabManager(
-            parent=tab_container,
-            tab_configs=tab_configs,
-            opener_type=opener_var.get(),
-            opener_config=opener_configs[opener_var.get()],
-            close_confirmation=True,
-            close_confirmation_type=CloseConfirmationType.YESNO,
+            self.body,
+            tab_configs=TAB_CONFIGS,
+            opener_type=opener,
+            opener_config=OPENER_CONFIGS[opener],
+            close_button_style="button",
+            close_confirmation=False,
+            close_confirmation_type=CloseConfirmationType.NONE,
             close_mode=CloseMode.ACTIVE_ONLY,
-            enable_keyboard_shortcuts=True,
-            show_notebook_icons=True,
-            use_notebook_fallback_icons=True,
+            theme=self.mode,
         )
-
-        # Setup event callbacks with toasts
-        def on_tab_opened(tab_id):
-            print(f"Tab opened: {tab_id}")
-            if tab_id.startswith("dynamic"):
-                manager.show_notification(f"🚀 Opened: {tab_id[-4:]}", "success", 1500)
-
-        def on_tab_closed(tab_id):
-            print(f"Tab closed: {tab_id}")
-            config = manager.tab_configs.get(tab_id)
-            title = config.title if config else tab_id
-            manager.show_notification(
-                f"👋 Closed: {title}",
-                "info",
-                1500,
-            )
-
-        def on_tab_switched(new_tab, old_tab):
-            if new_tab and old_tab:
-                print(f"Switched from {old_tab} to {new_tab}")
-                # Show subtle switch notification occasionally
-                if random.random() < 0.3:  # 30% chance
-                    manager.after(
-                        200,
-                        lambda: manager.show_notification(
-                            f"📋 Active: {manager.tab_configs[new_tab].title}",
-                            "info",
-                            1000,
-                        ),
-                    )
-
-        manager.on_tab_opened = on_tab_opened
-        manager.on_tab_closed = on_tab_closed
-        manager.on_tab_switched = on_tab_switched
-
         manager.pack(fill="both", expand=True)
+        self.manager = manager
 
-        # Auto-open home tab
-        root.after(100, lambda: manager.open_tab("home"))
+        for tab_id in previous:
+            if tab_id in manager.tab_configs:
+                manager.open_tab(tab_id)
+        if current in manager.tab_configs:
+            manager.select_tab(current)
 
-    ttk.Button(demo_frame, text="Create Tab Manager", command=create_tab_manager).pack(
-        side="right", padx=5
-    )
 
-    # Tab container
-    tab_container = ttk.Frame(main_frame)
-    tab_container.pack(fill="both", expand=True)
-
-    # Initial setup
-    create_tab_manager()
-
+def create_demo_app() -> tk.Tk:
+    root = tk.Tk()
+    root.title("FlexTabs")
+    root.geometry("960x620")
+    root.minsize(720, 460)
+    root.app = DemoApp(root)
     return root
 
 
 if __name__ == "__main__":
-    # Create and run the demo
-    app = create_demo_app()
-
-    print("Tab Manager Demo Started!")
-    print("Try these features:")
-    print("• Switch opener types using radio buttons")
-    print("• Use keyboard shortcuts (F1-F4, Ctrl+W, Ctrl+Tab)")
-    print("• Right-click tabs to close them")
-    print("• Try closing the unclosable 'System' tab")
-    print("• Add dynamic tabs from the Home tab")
-    print("• Change settings in the Settings tab")
-
-    app.mainloop()
+    create_demo_app().mainloop()

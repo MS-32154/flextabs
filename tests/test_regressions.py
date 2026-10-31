@@ -105,12 +105,31 @@ def test_long_emoji_shown_in_tab_and_opener(root):
     assert m.opener.buttons["a"].cget("text").startswith(emoji)
 
 
-def test_missing_image_uses_fallback_icon(root):
+def test_missing_image_shows_title_only(root):
     m = TabManager(root, configs("a", icon="does/not/exist.png"), opener_type="toolbar")
     m.open_tab("a")
-    fallback = IconManager.get_fallback_text("default")
-    assert tab_text(m, "a").startswith(fallback)
-    assert m.opener.buttons["a"].cget("text").startswith(fallback)
+    assert tab_text(m, "a") == "A"
+    assert m.opener.buttons["a"].cget("text") == "A"
+    assert not m.opener.buttons["a"].cget("image")
+
+
+def test_fallback_icon_is_opt_in(root):
+    plain = TabManager(root, configs("a"), opener_type="toolbar")
+    plain.open_tab("a")
+    assert not plain.notebook.tab(plain.tab_states["a"]["tab_object"], "image")
+    assert not plain.opener.buttons["a"].cget("image")
+
+    m = TabManager(
+        root,
+        configs("b"),
+        opener_type="toolbar",
+        opener_config={"use_fallback_icons": True},
+        use_notebook_fallback_icons=True,
+    )
+    m.open_tab("b")
+    assert tab_text(m, "b") == "B"  # fallback is an image, not text
+    assert m.notebook.tab(m.tab_states["b"]["tab_object"], "image")
+    assert m.opener.buttons["b"].cget("image")
 
 
 # --- Menu opener ---------------------------------------------------------------
@@ -269,24 +288,35 @@ def test_callback_errors_do_not_fail_open_or_close(root):
 
 
 @pytest.mark.parametrize("opener_type", ["toolbar", "sidebar"])
-def test_opener_button_reflects_open_state(root, opener_type):
+def test_opener_button_reflects_open_and_current_state(root, opener_type):
     m = TabManager(root, configs("a", "b"), opener_type=opener_type)
+    btn = m.opener.buttons
     m.open_tab("a")
-    assert "selected" in m.opener.buttons["a"].state()
-    assert "selected" not in m.opener.buttons["b"].state()
+    m.open_tab("b")
+    root.update()
+    # open -> 'alternate'; selected (current) -> 'selected'
+    assert "alternate" in btn["a"].state() and "alternate" in btn["b"].state()
+    assert "selected" in btn["b"].state() and "selected" not in btn["a"].state()
+
+    m.select_tab("a")
+    root.update()
+    assert "selected" in btn["a"].state() and "selected" not in btn["b"].state()
 
     # Survives an opener rebuild
     m.add_tab_config(TabConfig("c", "C", SimpleContent))
-    assert "selected" in m.opener.buttons["a"].state()
+    btn = m.opener.buttons
+    assert "alternate" in btn["a"].state() and "selected" in btn["a"].state()
+    assert "alternate" not in btn["c"].state()
 
     m.close_tab("a")
-    assert "selected" not in m.opener.buttons["a"].state()
+    root.update()
+    assert "alternate" not in btn["a"].state() and "selected" not in btn["a"].state()
 
 
 def test_icon_kind_independent_of_cwd(tmp_path, monkeypatch):
-    (tmp_path / "home").write_text("not an image")
+    (tmp_path / "Hm").write_text("not an image")
     monkeypatch.chdir(tmp_path)
-    assert IconManager.is_text_icon("home")
+    assert IconManager.is_text_icon("Hm")
 
 
 def test_icon_cache_prunes_destroyed_interpreters(icon_file):
@@ -440,13 +470,22 @@ def test_tab_id_at_position(root):
     assert m._get_tab_id_at_position(5000, 5000) is None
 
 
-def test_unclosable_style_configured_in_every_root():
+def test_flextabs_styles_created_in_every_root():
     for _ in range(2):
         r = tk.Tk()
         r.withdraw()
         try:
-            m = TabManager(r, configs("a", closable=False), opener_type="toolbar")
-            assert m.opener.buttons["a"].cget("style") == "Unclosable.TButton"
-            assert ttk.Style(r).lookup("Unclosable.TButton", "foreground") == "gray"
+            m = TabManager(r, configs("a"), opener_type="toolbar", theme="light")
+            style = m.opener.buttons["a"].cget("style")
+            assert style == m.theme.toolbar_button
+            assert ttk.Style(r).lookup(style, "background") == m.theme.palette.bg
         finally:
             r.destroy()
+
+
+def test_unclosable_tabs_have_no_visual_noise(root):
+    m = TabManager(root, configs("a", closable=False), opener_type="sidebar")
+    m.open_tab("a")
+    assert tab_text(m, "a") == "A"
+    assert m.opener.buttons["a"].cget("text") == "A"
+    assert m.opener.buttons["a"].cget("style") == m.theme.nav_button

@@ -7,9 +7,8 @@ from dataclasses import dataclass, field
 from tkinter import messagebox, ttk
 from typing import Any
 
-from PIL import ImageTk
-
 from .icons import IconManager  # re-exported for backward compatibility
+from .theme import Theme
 from .widgets import TooltipWidget
 
 logger = logging.getLogger(__name__)
@@ -91,6 +90,8 @@ class TabContent(ABC):
 
 
 class TabOpener(ABC):
+    """Base class for widgets that list tabs and open them on request."""
+
     def __init__(self, parent: tk.Misc, config: dict[str, Any]):
         self.parent = parent
         self.config = config
@@ -103,7 +104,7 @@ class TabOpener(ABC):
         self.show_icons = config.get("show_icons", True)
         self.icon_position = config.get("icon_position", "left")
         self.fallback_icon_key = config.get("fallback_icon_key", "default")
-        self.use_fallback_icons = config.get("use_fallback_icons", True)
+        self.use_fallback_icons = config.get("use_fallback_icons", False)
 
     @abstractmethod
     def setup_opener(self, tab_configs: list[TabConfig]):
@@ -121,6 +122,11 @@ class TabOpener(ABC):
     def set_tab_manager(self, tab_manager):
         self.tab_manager = tab_manager
 
+    @property
+    def theme(self) -> Theme | None:
+        """The manager's Theme, or None for the plain ttk look."""
+        return getattr(self.tab_manager, "theme", None)
+
     def cleanup(self):
         for tooltip in self._tooltips.values():
             if hasattr(tooltip, "_hide_tooltip"):
@@ -136,48 +142,52 @@ class TabOpener(ABC):
         self._icons.clear()
 
     def update_tab_state(self, tab_id: str, is_open: bool):
-        pass
+        """Called when a tab is opened or closed."""
 
-    def _load_icon(self, tab_config: TabConfig) -> ImageTk.PhotoImage | None:
+    def update_current_tab(self, tab_id: str | None):
+        """Called when the selected tab changes (None when no tab is open)."""
+
+    def _icon_spec(self, tab_config: TabConfig) -> str | None:
+        """Icon spec for the opener: the tab's icon, else the fallback icon."""
+        spec = tab_config.get_icon("opener")
+        if not spec and self.use_fallback_icons:
+            spec = IconManager.get_fallback_icon(self.fallback_icon_key)
+        return spec
+
+    def _load_icon(self, tab_config: TabConfig):
+        """Image (or ttk state-mapped image spec) for a tab's opener item."""
         if not self.show_icons:
             return None
-
-        icon_path = tab_config.get_icon("opener")
-        if not icon_path:
+        spec = self._icon_spec(tab_config)
+        if not spec or IconManager.is_text_icon(spec):
             return None
 
         if tab_config.id not in self._icons:
-            self._icons[tab_config.id] = IconManager.get_icon(
-                icon_path, self.icon_size, self.parent
-            )
+            theme = self.theme
+            if theme is not None:
+                image = theme.icon_states(spec, self.icon_size, self.parent)
+            else:
+                color = ttk.Style(self.parent).lookup("TButton", "foreground")
+                image = IconManager.render(
+                    spec, self.icon_size, color or "#3f3f46", self.parent
+                )
+            self._icons[tab_config.id] = image
 
         return self._icons[tab_config.id]
 
     def _get_button_text(self, tab_config: TabConfig) -> str:
         text = tab_config.title
-        icon_path = tab_config.get_icon("opener")
+        spec = self._icon_spec(tab_config)
+        if not (self.show_icons and IconManager.is_text_icon(spec)):
+            return text
 
-        icon_text = None
-        if self.show_icons and IconManager.is_text_icon(icon_path):
-            icon_text = icon_path
-        elif (
-            self.show_icons
-            and self.use_fallback_icons
-            and self._icons.get(tab_config.id) is None
-        ):
-            icon_text = IconManager.get_fallback_text(self.fallback_icon_key)
-
-        if icon_text:
-            if self.icon_position == "left":
-                text = f"{icon_text} {text}"
-            elif self.icon_position == "right":
-                text = f"{text} {icon_text}"
-            elif self.icon_position == "top":
-                text = f"{icon_text}\n{text}"
-            elif self.icon_position == "bottom":
-                text = f"{text}\n{icon_text}"
-
-        return text
+        if self.icon_position == "right":
+            return f"{text} {spec}"
+        if self.icon_position == "top":
+            return f"{spec}\n{text}"
+        if self.icon_position == "bottom":
+            return f"{text}\n{spec}"
+        return f"{spec} {text}"
 
     def _add_tooltip(self, widget: tk.Misc, text: str):
         if text:
@@ -185,14 +195,6 @@ class TabOpener(ABC):
             self._tooltips[id(widget)] = tooltip
             return tooltip
         return None
-
-    def _style_unclosable_widget(self, widget: tk.Misc):
-        if not isinstance(widget, ttk.Button):
-            return
-        # Configure per widget: styles live in each Tk interpreter separately
-        style = ttk.Style(widget)
-        style.configure("Unclosable.TButton", foreground="gray", background="lightgray")
-        widget.configure(style="Unclosable.TButton")
 
     def _open_tab_safe(self, tab_id: str):
         try:
@@ -202,29 +204,28 @@ class TabOpener(ABC):
             logger.exception("Failed to open tab %r", tab_id)
             messagebox.showerror("Error", f"Failed to open tab: {e}")
 
+    def _button_style(self) -> str | None:
+        """ttk style for opener buttons (None keeps the default TButton)."""
+        return None
+
     def _create_button(self, parent: tk.Misc, tab_config: TabConfig) -> ttk.Button:
-        btn_style = self.config.get("button_style", {})
+        btn_kwargs = {
+            "text": self._get_button_text(tab_config),
+            "command": lambda: self._open_tab_safe(tab_config.id),
+        }
+        style = self._button_style()
+        if style:
+            btn_kwargs["style"] = style
+        btn_kwargs.update(self.config.get("button_style", {}))
 
         icon = self._load_icon(tab_config)
-        text = self._get_button_text(tab_config)
-
-        btn_kwargs = {
-            "text": text,
-            "command": lambda: self._open_tab_safe(tab_config.id),
-            **btn_style,
-        }
-
         if icon:
             btn_kwargs["image"] = icon
             btn_kwargs["compound"] = self._get_compound_mode()
 
         btn = ttk.Button(parent, **btn_kwargs)
-
         if icon:
-            btn.image = icon
-
-        if not tab_config.closable:
-            self._style_unclosable_widget(btn)
+            btn.image = icon  # keep a reference
 
         if tab_config.tooltip:
             self._add_tooltip(btn, tab_config.tooltip)
@@ -232,10 +233,6 @@ class TabOpener(ABC):
         return btn
 
     def _get_compound_mode(self) -> str:
-        position_map = {
-            "left": "left",
-            "right": "right",
-            "top": "top",
-            "bottom": "bottom",
-        }
-        return position_map.get(self.icon_position, "left")
+        if self.icon_position in ("left", "right", "top", "bottom"):
+            return self.icon_position
+        return "left"

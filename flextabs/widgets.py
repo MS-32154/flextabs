@@ -1,31 +1,36 @@
+import contextlib
 import tkinter as tk
 from collections import deque
 from typing import ClassVar
 
+from .icons import IconManager
+from .theme import LIGHT, palette_for
+
 
 class TooltipWidget:
-    """A tooltip widget that can be attached to any tkinter widget."""
+    """A tooltip that can be attached to any tkinter widget."""
 
     def __init__(
         self,
         widget: tk.Misc,
         text: str,
         delay: int = 500,
-        wraplength: int = 250,
-        font: tuple = ("TkDefaultFont", 8, "normal"),
+        wraplength: int = 280,
+        font: tuple | str | None = None,
     ):
         self.widget = widget
         self.text = text
         self.delay = delay
         self.wraplength = wraplength
-        self.font = font
+        self.font = font or "TkDefaultFont"
         self.tooltip = None
         self.after_id = None
 
-        # Bind events
-        widget.bind("<Enter>", self._on_enter)
-        widget.bind("<Leave>", self._on_leave)
-        widget.bind("<Motion>", self._on_motion)
+        # Add to (not replace) any existing bindings
+        widget.bind("<Enter>", self._on_enter, add="+")
+        widget.bind("<Leave>", self._on_leave, add="+")
+        widget.bind("<Motion>", self._on_motion, add="+")
+        widget.bind("<ButtonPress>", self._on_leave, add="+")
 
     def _on_enter(self, event):
         self._cancel_tooltip()
@@ -39,26 +44,29 @@ class TooltipWidget:
             self._position_tooltip(event)
 
     def _show_tooltip(self):
+        self.after_id = None
         if self.tooltip:
             return
 
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        palette = palette_for(self.widget)
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
 
-        self.tooltip = tk.Toplevel(self.widget)
+        self.tooltip = tk.Toplevel(self.widget, background=palette.tooltip_bg)
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.wm_geometry(f"+{x}+{y}")
-        self.tooltip.attributes("-topmost", True)
+        with contextlib.suppress(tk.TclError):
+            self.tooltip.attributes("-topmost", True)
 
         tk.Label(
             self.tooltip,
             text=self.text,
-            background="#ffffe0",
-            relief="solid",
-            borderwidth=1,
+            background=palette.tooltip_bg,
+            foreground=palette.tooltip_fg,
+            borderwidth=0,
             font=self.font,
-            padx=4,
-            pady=2,
+            padx=8,
+            pady=4,
             wraplength=self.wraplength,
             justify=tk.LEFT,
         ).pack()
@@ -66,12 +74,14 @@ class TooltipWidget:
     def _hide_tooltip(self):
         self._cancel_tooltip()
         if self.tooltip:
-            self.tooltip.destroy()
+            with contextlib.suppress(tk.TclError):
+                self.tooltip.destroy()
             self.tooltip = None
 
     def _cancel_tooltip(self):
         if self.after_id:
-            self.widget.after_cancel(self.after_id)
+            with contextlib.suppress(tk.TclError):
+                self.widget.after_cancel(self.after_id)
             self.after_id = None
 
     def _position_tooltip(self, event):
@@ -85,13 +95,13 @@ class TooltipWidget:
         screen_width = self.widget.winfo_screenwidth()
         screen_height = self.widget.winfo_screenheight()
 
-        x = event.x_root + 10
-        y = event.y_root + 10
+        x = event.x_root + 12
+        y = event.y_root + 16
 
         if x + tooltip_width > screen_width:
-            x = event.x_root - tooltip_width - 10
+            x = event.x_root - tooltip_width - 12
         if y + tooltip_height > screen_height:
-            y = event.y_root - tooltip_height - 10
+            y = event.y_root - tooltip_height - 12
 
         x = max(0, min(x, screen_width - tooltip_width))
         y = max(0, min(y, screen_height - tooltip_height))
@@ -108,14 +118,23 @@ class TooltipWidget:
 
 
 class ToastNotification:
-    """A toast notification system supporting queued and stacked modes."""
+    """Toast notifications (cards with a status icon), stacked or queued."""
 
+    # Status accent colours of the light palette, for reference only: toasts
+    # take their colours from the window's palette (see theme.palette_for).
     COLORS: ClassVar[dict[str, dict[str, str]]] = {
-        "info": {"bg": "#d1ecf1", "fg": "#0c5460", "border": "#bee5eb"},
-        "warning": {"bg": "#fff3cd", "fg": "#856404", "border": "#ffeaa7"},
-        "error": {"bg": "#f8d7da", "fg": "#721c24", "border": "#f5c6cb"},
-        "success": {"bg": "#d4edda", "fg": "#155724", "border": "#c3e6cb"},
+        kind: {"accent": getattr(LIGHT, kind)}
+        for kind in ("info", "warning", "error", "success")
     }
+    ICONS: ClassVar[dict[str, str]] = {
+        "info": "info",
+        "success": "check-circle",
+        "warning": "alert",
+        "error": "x-circle",
+    }
+    WIDTH: ClassVar[int] = 320
+    MARGIN: ClassVar[int] = 16
+    GAP: ClassVar[int] = 8
 
     _queue: ClassVar[deque] = deque()
     _active_toasts: ClassVar[list[tk.Toplevel]] = []
@@ -152,6 +171,22 @@ class ToastNotification:
         )
 
     @staticmethod
+    def _stack_offset() -> int:
+        """Vertical space taken by visible toasts (forgetting destroyed ones)."""
+        offset = 0
+        alive = []
+        for toast in ToastNotification._active_toasts:
+            try:
+                if not toast.winfo_exists():
+                    continue
+                offset += toast.winfo_reqheight() + ToastNotification.GAP
+            except tk.TclError:
+                continue  # its application was destroyed
+            alive.append(toast)
+        ToastNotification._active_toasts[:] = alive
+        return offset
+
+    @staticmethod
     def _show_toast(
         parent: tk.Misc,
         message: str,
@@ -161,77 +196,82 @@ class ToastNotification:
         mode: str,
         on_close=None,
     ):
-        root = parent
-        while root.master:
-            root = root.master
+        root = parent.winfo_toplevel()
+        palette = palette_for(parent)
+        width = ToastNotification.WIDTH
 
-        root.update_idletasks()
-
-        toast_width, toast_height = 280, 60
-        screen_x = root.winfo_x()
-        screen_y = root.winfo_y()
-        screen_width = root.winfo_width()
-        screen_height = root.winfo_height()
-
-        x_offset = 20
-        y_offset = (
-            20 + (len(ToastNotification._active_toasts) * (toast_height + 10))
-            if mode == "stacked"
-            else 20
-        )
-
-        if position == "top-right":
-            x = screen_x + screen_width - toast_width - x_offset
-            y = screen_y + y_offset
-        elif position == "bottom-right":
-            x = screen_x + screen_width - toast_width - x_offset
-            y = screen_y + screen_height - toast_height - y_offset
-        elif position == "top-left":
-            x = screen_x + x_offset
-            y = screen_y + y_offset
-        elif position == "bottom-left":
-            x = screen_x + x_offset
-            y = screen_y + screen_height - toast_height - y_offset
-        else:
-            x = screen_x + screen_width - toast_width - x_offset
-            y = screen_y + y_offset
-
-        toast = tk.Toplevel(root)
+        toast = tk.Toplevel(root, background=palette.border)
         toast.wm_overrideredirect(True)
-        toast.attributes("-topmost", True)
-        toast.wm_geometry(f"{toast_width}x{toast_height}+{x}+{y}")
+        with contextlib.suppress(tk.TclError):
+            toast.attributes("-topmost", True)
 
-        ToastNotification._active_toasts.append(toast)
+        card = tk.Frame(toast, background=palette.surface, padx=12, pady=10)
+        card.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
 
-        color_scheme = ToastNotification.COLORS.get(
-            toast_type, ToastNotification.COLORS["info"]
+        widgets: list[tk.Misc] = [toast, card]
+        icon = IconManager.get_builtin_icon(
+            ToastNotification.ICONS.get(toast_type, "info"),
+            18,
+            palette.status_color(toast_type),
+            toast,
         )
-
-        frame = tk.Frame(toast, bg=color_scheme["border"], padx=2, pady=2)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        inner_frame = tk.Frame(frame, bg=color_scheme["bg"])
-        inner_frame.pack(fill=tk.BOTH, expand=True)
+        if icon is not None:
+            icon_label = tk.Label(
+                card, image=icon, background=palette.surface, borderwidth=0
+            )
+            icon_label.image = icon
+            icon_label.pack(side=tk.LEFT, anchor="n", padx=(0, 10))
+            widgets.append(icon_label)
 
         label = tk.Label(
-            inner_frame,
+            card,
             text=message,
-            bg=color_scheme["bg"],
-            fg=color_scheme["fg"],
-            font=("TkDefaultFont", 9),
-            wraplength=260,
+            background=palette.surface,
+            foreground=palette.text,
+            font="TkDefaultFont",
+            wraplength=width - 70,
             justify=tk.LEFT,
+            anchor="w",
         )
-        label.pack(expand=True, padx=10, pady=10)
+        label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        widgets.append(label)
+
+        # Size to content, then position inside the parent window
+        toast.update_idletasks()
+        height = toast.winfo_reqheight()
+        root.update_idletasks()
+        win_x, win_y = root.winfo_rootx(), root.winfo_rooty()
+        win_w, win_h = root.winfo_width(), root.winfo_height()
+        margin = ToastNotification.MARGIN
+        stack = ToastNotification._stack_offset() if mode == "stacked" else 0
+
+        right = win_x + win_w - width - margin
+        left = win_x + margin
+        top = win_y + margin + stack
+        bottom = win_y + win_h - height - margin - stack
+        x, y = {
+            "top-left": (left, top),
+            "bottom-left": (left, bottom),
+            "bottom-right": (right, bottom),
+        }.get(position, (right, top))
+        toast.wm_geometry(f"{width}x{height}+{x}+{y}")
+
+        ToastNotification._active_toasts.append(toast)
+        dismissed = False
 
         def dismiss(event=None):
+            nonlocal dismissed
+            if dismissed:
+                return
+            dismissed = True
             if toast in ToastNotification._active_toasts:
                 ToastNotification._active_toasts.remove(toast)
-            toast.destroy()
+            with contextlib.suppress(tk.TclError):
+                toast.destroy()
             if on_close:
                 on_close()
 
-        for widget in [toast, frame, inner_frame, label]:
+        for widget in widgets:
             widget.bind("<Button-1>", dismiss)
 
         toast.after(duration, dismiss)

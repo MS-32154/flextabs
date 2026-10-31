@@ -4,7 +4,8 @@ FlexTabs - A powerful and flexible tab management library for tkinter
 FlexTabs extends tkinter's ttk.Notebook with advanced features including:
 - Dynamic tab opening/closing with state retention
 - Multiple opener styles (Toolbar, Sidebar, Menu)
-- Icon support with caching
+- Built-in vector icon set, plus image-file and text icons
+- Flat light/dark/auto themes that never change the app's global ttk theme
 - Keyboard shortcuts
 - Event system with callbacks
 - Toast notifications
@@ -18,7 +19,7 @@ Basic Usage:
             ttk.Label(self.frame, text="My content").pack()
 
     tab_configs = [
-        TabConfig("home", "Home", MyTabContent, icon="🏠", closable=False)
+        TabConfig("home", "Home", MyTabContent, icon="home", closable=False)
     ]
 
     tab_manager = TabManager(
@@ -41,6 +42,7 @@ from .icons import IconManager
 from .openers import MenuOpener, SidebarOpener, ToolbarOpener
 from .tab_base import TabConfig, TabContent, TabOpener
 from .tab_manager import TabManager
+from .theme import DARK, LIGHT, Palette, apply_app_theme
 
 # Widgets
 from .widgets import ToastNotification, TooltipWidget
@@ -53,12 +55,15 @@ VERSION_INFO = tuple(
 
 # Public API
 __all__ = [
+    "DARK",
+    "LIGHT",
     "VERSION",
     "VERSION_INFO",
     "CloseConfirmationType",
     "CloseMode",
     "IconManager",
     "MenuOpener",
+    "Palette",
     "SidebarOpener",
     "TabConfig",
     "TabContent",
@@ -68,6 +73,7 @@ __all__ = [
     "ToastNotification",
     "ToolbarOpener",
     "TooltipWidget",
+    "apply_app_theme",
 ]
 
 
