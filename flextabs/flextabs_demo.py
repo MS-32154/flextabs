@@ -1,13 +1,14 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
 import os
-import tempfile
 import random
+import tempfile
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+from .enums import CloseConfirmationType, CloseMode
+from .tab_base import TabConfig, TabContent
 
 # Import your tab manager components
 from .tab_manager import TabManager
-from .tab_base import TabConfig, TabContent
-from .enums import CloseMode, CloseConfirmationType
 
 
 def create_demo_icons():
@@ -160,7 +161,7 @@ class HomeTab(TabContent):
         manager = self.get_manager()
         if manager:
             dynamic_tabs = [
-                tid for tid in manager.tab_configs.keys() if tid.startswith("dynamic_")
+                tid for tid in manager.tab_configs if tid.startswith("dynamic_")
             ]
             if dynamic_tabs:
                 tab_id = random.choice(dynamic_tabs)
@@ -268,7 +269,6 @@ class SettingsTab(TabContent):
         if manager:
             open_tabs = manager.get_open_tabs()
             if len(open_tabs) > 1:
-                current = manager.get_current_tab()
                 random.shuffle(open_tabs)
                 # Close all and reopen in random order
                 for tab_id in open_tabs:
@@ -403,7 +403,10 @@ class UnclosableTab(TabContent):
         )
         ttk.Label(
             self.frame,
-            text="This tab cannot be closed.\nIt demonstrates unclosable tab functionality.",
+            text=(
+                "This tab cannot be closed.\n"
+                "It demonstrates unclosable tab functionality."
+            ),
             justify="center",
         ).pack(pady=10)
 
@@ -556,8 +559,10 @@ def create_demo_app():
 
         def on_tab_closed(tab_id):
             print(f"Tab closed: {tab_id}")
+            config = manager.tab_configs.get(tab_id)
+            title = config.title if config else tab_id
             manager.show_notification(
-                f"👋 Closed: {manager.tab_configs.get(tab_id, type('', (), {'title': tab_id})).title}",
+                f"👋 Closed: {title}",
                 "info",
                 1500,
             )

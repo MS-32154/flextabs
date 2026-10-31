@@ -1,13 +1,14 @@
-import pytest
 import tkinter as tk
 from tkinter import ttk
 from unittest.mock import Mock, patch
 
-from flextabs.enums import TabPosition, CloseMode, CloseConfirmationType
-from flextabs.widgets import TooltipWidget, ToastNotification
+import pytest
+
+from flextabs.enums import CloseConfirmationType, CloseMode, TabPosition
+from flextabs.openers import MenuOpener, SidebarOpener, ToolbarOpener
 from flextabs.tab_base import TabConfig, TabContent
-from flextabs.openers import ToolbarOpener, SidebarOpener, MenuOpener
 from flextabs.tab_manager import TabManager
+from flextabs.widgets import ToastNotification, TooltipWidget
 
 
 class MockTabContent(TabContent):
@@ -209,12 +210,15 @@ class TestTooltipWidget:
 class TestToastNotification:
     """Test ToastNotification class."""
 
-    @patch("tkinter.Toplevel")
-    def test_toast_creation(self, mock_toplevel, root):
-        mock_toast = Mock()
-        mock_toplevel.return_value = mock_toast
+    def test_toast_creation(self, root):
+        before = len(ToastNotification._active_toasts)
+        ToastNotification.show(root, "Test message", duration=10)
+        assert len(ToastNotification._active_toasts) == before + 1
 
-        ToastNotification.show(root, "Test message")
+        toast = ToastNotification._active_toasts[-1]
+        root.after(50, root.quit)
+        root.mainloop()  # let the auto-dismiss timer fire
+        assert toast not in ToastNotification._active_toasts
 
     def test_toast_colors(self):
         colors = ToastNotification.COLORS
@@ -287,7 +291,7 @@ class TestMenuOpener:
 
         # Add another config and refresh
         new_config = TabConfig("tab4", "Tab Four", MockTabContent)
-        opener.refresh_opener(sample_tab_configs + [new_config])
+        opener.refresh_opener([*sample_tab_configs, new_config])
 
 
 class TestTabManager:

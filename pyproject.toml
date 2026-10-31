@@ -19,3 +19,13 @@ dependencies = ["Pillow",]
 Homepage = "https://github.com/MS-32154/flextabs"
 "Bug Reports" = "https://github.com/MS-32154/flextabs/issues"
 Source = "https://github.com/MS-32154/flextabs"
+[tool.ruff]
+target-version = "py315"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "SIM", "PIE", "BLE", "RUF", "I"]
+ignore = [
+    "B027",   # TabContent/TabOpener hooks are intentionally empty, overridable defaults
+    "RUF001", # emoji/unicode glyphs in UI strings are intentional
+]

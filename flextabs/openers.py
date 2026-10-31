@@ -1,8 +1,13 @@
-from tkinter import *
+import contextlib
+import logging
+import tkinter as tk
 from tkinter import ttk
 
 from .enums import TabPosition
-from .tab_base import TabOpener, TabConfig
+from .icons import IconManager
+from .tab_base import TabConfig, TabOpener
+
+logger = logging.getLogger(__name__)
 
 
 class ButtonOpener(TabOpener):
@@ -10,19 +15,19 @@ class ButtonOpener(TabOpener):
 
     def setup_common_container(self, position, layout, width=None):
         side_map = {
-            TabPosition.TOP: TOP,
-            TabPosition.BOTTOM: BOTTOM,
-            TabPosition.LEFT: LEFT,
-            TabPosition.RIGHT: RIGHT,
+            TabPosition.TOP: tk.TOP,
+            TabPosition.BOTTOM: tk.BOTTOM,
+            TabPosition.LEFT: tk.LEFT,
+            TabPosition.RIGHT: tk.RIGHT,
         }
         side = side_map[position]
-        fill = X if layout == "horizontal" else Y
+        fill = tk.X if layout == "horizontal" else tk.Y
 
         frame_kwargs = self.config.get("style", {})
 
         if width:
             self.container = ttk.Frame(self.parent, width=width, **frame_kwargs)
-            self.container.pack(side=side, fill=Y)
+            self.container.pack(side=side, fill=tk.Y)
             self.container.pack_propagate(False)
         else:
             self.container = ttk.Frame(self.parent, **frame_kwargs)
@@ -30,7 +35,7 @@ class ButtonOpener(TabOpener):
 
         self._widgets["container"] = self.container
         self.buttons_frame = ttk.Frame(self.container)
-        self.buttons_frame.pack(fill=BOTH, expand=True)
+        self.buttons_frame.pack(fill=tk.BOTH, expand=True)
         self._widgets["buttons_frame"] = self.buttons_frame
 
     def _create_buttons(self, tab_configs: list[TabConfig], layout: str):
@@ -42,7 +47,7 @@ class ButtonOpener(TabOpener):
             btn_parent = self.buttons_frame
             if self.use_button_frame():
                 btn_frame = ttk.Frame(self.buttons_frame)
-                btn_frame.pack(side=TOP, fill=X, padx=5, pady=2)
+                btn_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=2)
                 self.button_frames[tab_config.id] = btn_frame
                 self._widgets[f"frame_{tab_config.id}"] = btn_frame
                 btn_parent = btn_frame
@@ -52,6 +57,12 @@ class ButtonOpener(TabOpener):
 
             self.buttons[tab_config.id] = btn
             self._widgets[f"btn_{tab_config.id}"] = btn
+
+            # Preserve open-state indication across rebuilds/refreshes
+            if self.tab_manager is not None and self.tab_manager.is_tab_open(
+                tab_config.id
+            ):
+                self.update_tab_state(tab_config.id, True)
 
     def _smart_refresh(self, tab_configs: list[TabConfig]) -> bool:
         if not hasattr(self, "buttons_frame") or not self.buttons_frame.winfo_exists():
@@ -78,24 +89,25 @@ class ButtonOpener(TabOpener):
             self._create_buttons(tab_configs, layout)
             return True
         except Exception:
+            logger.exception("Opener refresh failed; falling back to full rebuild")
             return False
 
     def update_tab_state(self, tab_id: str, is_open: bool):
-        if hasattr(self, "buttons") and tab_id in self.buttons:
-            try:
-                state = "pressed" if is_open else "normal"
-                self.buttons[tab_id].configure(state=state)
-            except:
-                pass
+        """Reflect a tab's open/closed state via the ttk 'selected' button state."""
+        btn = getattr(self, "buttons", {}).get(tab_id)
+        if btn is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            btn.state(["selected"] if is_open else ["!selected"])
 
     def use_button_frame(self):
         return False
 
     def pack_button(self, btn, layout):
         if layout == "horizontal":
-            btn.pack(side=LEFT, padx=2, pady=2)
+            btn.pack(side=tk.LEFT, padx=2, pady=2)
         else:
-            btn.pack(side=TOP, fill=X, padx=2, pady=2)
+            btn.pack(side=tk.TOP, fill=tk.X, padx=2, pady=2)
 
 
 class ToolbarOpener(ButtonOpener):
@@ -133,11 +145,19 @@ class SidebarOpener(ButtonOpener):
             title_label = ttk.Label(
                 self.container, text=title, font=("TkDefaultFont", 10, "bold")
             )
-            title_label.pack(side=TOP, pady=(5, 10))
+            title_label.pack(side=tk.TOP, pady=(5, 10))
             self._widgets["title"] = title_label
 
     def pack_button(self, btn, layout):
-        btn.pack(fill=X)
+        btn.pack(fill=tk.X)
+
+
+def _menu_is_empty(menu: tk.Menu) -> bool:
+    """True if ``menu`` has no entries other than a tear-off line."""
+    last = menu.index("end")
+    if last is None:
+        return True
+    return all(menu.type(i) == "tearoff" for i in range(last + 1))
 
 
 class MenuOpener(TabOpener):
@@ -148,12 +168,13 @@ class MenuOpener(TabOpener):
         if not root:
             raise ValueError("MenuOpener requires a Toplevel or Tk parent")
 
-        if not hasattr(root, "menubar") or not root.menubar:
-            root.menubar = Menu(root)
+        if not getattr(root, "menubar", None):
+            root.menubar = tk.Menu(root)
+            root.menubar._flextabs_created = True  # removed again when empty
             root.config(menu=root.menubar)
 
         menu_title = self.config.get("menu_title", "Tabs")
-        self.tabs_menu = Menu(root.menubar, tearoff=0)
+        self.tabs_menu = tk.Menu(root.menubar, tearoff=0)
         root.menubar.add_cascade(label=menu_title, menu=self.tabs_menu)
         self._widgets["menu"] = self.tabs_menu
 
@@ -165,12 +186,20 @@ class MenuOpener(TabOpener):
             if not tab_config.closable:
                 label = f"\u2022 {label}"
 
-            if self.show_icons and tab_config.icon and len(tab_config.icon) <= 4:
-                label = f"{tab_config.icon} {label}"
+            icon_value = tab_config.get_icon("opener")
+            if self.show_icons and IconManager.is_text_icon(icon_value):
+                label = f"{icon_value} {label}"
 
-            self.tabs_menu.add_command(
-                label=label, command=lambda tid=tab_config.id: self._open_tab_safe(tid)
-            )
+            item_kwargs = {
+                "label": label,
+                "command": lambda tid=tab_config.id: self._open_tab_safe(tid),
+            }
+            image = self._load_icon(tab_config)
+            if image is not None:
+                item_kwargs["image"] = image
+                item_kwargs["compound"] = "left"
+
+            self.tabs_menu.add_command(**item_kwargs)
 
     def _smart_refresh(self, tab_configs: list[TabConfig]) -> bool:
         if not hasattr(self, "tabs_menu"):
@@ -182,15 +211,40 @@ class MenuOpener(TabOpener):
             self._create_menu_items(tab_configs)
             return True
         except Exception:
+            logger.exception("Menu refresh failed")
             return False
 
     def refresh_opener(self, tab_configs: list[TabConfig]):
         self._smart_refresh(tab_configs)
 
-    def _get_root_window(self) -> Tk | Toplevel | None:
+    def cleanup(self):
+        """Remove this opener's cascade from the menubar, then destroy the menu."""
+        tabs_menu = getattr(self, "tabs_menu", None)
+        root = self._get_root_window()
+        menubar = getattr(root, "menubar", None) if root else None
+        if tabs_menu is not None and menubar is not None:
+            try:
+                last = menubar.index("end")
+                for i in range(last, -1, -1) if last is not None else ():
+                    if menubar.type(i) == "cascade" and menubar.entrycget(
+                        i, "menu"
+                    ) == str(tabs_menu):
+                        menubar.delete(i)
+                # Detach a menubar we created once no menus remain in it
+                if getattr(menubar, "_flextabs_created", False) and _menu_is_empty(
+                    menubar
+                ):
+                    root.config(menu="")
+                    menubar.destroy()
+                    root.menubar = None
+            except tk.TclError:
+                pass  # menubar already destroyed
+        super().cleanup()
+
+    def _get_root_window(self) -> tk.Tk | tk.Toplevel | None:
         parent = self.parent
         while parent:
-            if isinstance(parent, (Tk, Toplevel)):
+            if isinstance(parent, (tk.Tk, tk.Toplevel)):
                 return parent
             parent = parent.master
         return None

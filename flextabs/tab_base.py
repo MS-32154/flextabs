@@ -1,14 +1,18 @@
-from tkinter import *
-from tkinter import ttk
-from tkinter import messagebox
+import contextlib
+import logging
+import tkinter as tk
+import weakref
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-import weakref
-import os
-from PIL import Image, ImageTk
-from typing import Optional, Dict, Any
+from tkinter import messagebox, ttk
+from typing import Any
 
+from PIL import ImageTk
+
+from .icons import IconManager  # re-exported for backward compatibility
 from .widgets import TooltipWidget
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -42,89 +46,14 @@ class TabConfig:
         return None
 
 
-class IconManager:
-    _cache: Dict[str, ImageTk.PhotoImage] = {}
-    _default_size = (16, 16)
-    _fallback_icons = {
-        "default": "📄",
-        "home": "🏠",
-        "settings": "⚙️",
-        "help": "❓",
-        "tools": "🔧",
-        "data": "📊",
-        "reports": "📈",
-        "folder": "📁",
-        "file": "📄",
-        "image": "🖼️",
-        "text": "📝",
-        "code": "💻",
-        "database": "🗄️",
-        "network": "🌐",
-        "security": "🔒",
-        "error": "⚠️",
-        "warning": "⚠️",
-        "info": "ℹ️",
-        "success": "✅",
-    }
-
-    @classmethod
-    def get_icon(
-        cls, icon_path: str, size: tuple = None
-    ) -> Optional[ImageTk.PhotoImage]:
-        if not icon_path or len(icon_path) <= 4:
-            return None
-
-        size = size or cls._default_size
-        cache_key = f"{icon_path}_{size[0]}x{size[1]}"
-
-        if cache_key in cls._cache:
-            return cls._cache[cache_key]
-
-        try:
-            if os.path.exists(icon_path):
-                image = Image.open(icon_path)
-                image = image.resize(size, Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(image)
-                cls._cache[cache_key] = photo
-                return photo
-        except Exception:
-            pass
-
-        return None
-
-    @classmethod
-    def get_fallback_text(cls, fallback_key: str = None) -> str:
-        if fallback_key and fallback_key in cls._fallback_icons:
-            return cls._fallback_icons[fallback_key]
-        return cls._fallback_icons["default"]
-
-    @classmethod
-    def clear_cache(cls):
-        cls._cache.clear()
-
-    @classmethod
-    def preload_icons(cls, icon_paths: list[str], size: tuple = None):
-        for icon_path in icon_paths:
-            if icon_path:
-                cls.get_icon(icon_path, size)
-
-    @classmethod
-    def add_fallback_icon(cls, key: str, icon: str):
-        cls._fallback_icons[key] = icon
-
-    @classmethod
-    def get_fallback_icons(cls) -> dict:
-        return cls._fallback_icons.copy()
-
-
 class TabContent(ABC):
-    def __init__(self, parent: Widget, tab_id: str, config: TabConfig, manager):
+    def __init__(self, parent: tk.Misc, tab_id: str, config: TabConfig, manager):
         self.parent = parent
         self.tab_id = tab_id
         self.config = config
         self.manager = weakref.ref(manager)
         self.frame = ttk.Frame(parent)
-        self.frame.pack(fill=BOTH, expand=True)
+        self.frame.pack(fill=tk.BOTH, expand=True)
         self._is_initialized = False
 
         try:
@@ -132,7 +61,9 @@ class TabContent(ABC):
             self._is_initialized = True
         except Exception as e:
             self.cleanup()
-            raise RuntimeError(f"Failed to initialize tab content for '{tab_id}': {e}")
+            raise RuntimeError(
+                f"Failed to initialize tab content for '{tab_id}': {e}"
+            ) from e
 
     @abstractmethod
     def setup_content(self):
@@ -160,7 +91,7 @@ class TabContent(ABC):
 
 
 class TabOpener(ABC):
-    def __init__(self, parent: Widget, config: dict[str, Any]):
+    def __init__(self, parent: tk.Misc, config: dict[str, Any]):
         self.parent = parent
         self.config = config
         self.tab_manager = None
@@ -197,19 +128,17 @@ class TabOpener(ABC):
         self._tooltips.clear()
 
         for widget in self._widgets.values():
-            if widget and hasattr(widget, "winfo_exists"):
-                try:
+            if widget is not None and hasattr(widget, "winfo_exists"):
+                with contextlib.suppress(tk.TclError):
                     if widget.winfo_exists():
                         widget.destroy()
-                except:
-                    pass
         self._widgets.clear()
         self._icons.clear()
 
     def update_tab_state(self, tab_id: str, is_open: bool):
         pass
 
-    def _load_icon(self, tab_config: TabConfig) -> Optional[ImageTk.PhotoImage]:
+    def _load_icon(self, tab_config: TabConfig) -> ImageTk.PhotoImage | None:
         if not self.show_icons:
             return None
 
@@ -218,7 +147,9 @@ class TabOpener(ABC):
             return None
 
         if tab_config.id not in self._icons:
-            self._icons[tab_config.id] = IconManager.get_icon(icon_path, self.icon_size)
+            self._icons[tab_config.id] = IconManager.get_icon(
+                icon_path, self.icon_size, self.parent
+            )
 
         return self._icons[tab_config.id]
 
@@ -227,12 +158,12 @@ class TabOpener(ABC):
         icon_path = tab_config.get_icon("opener")
 
         icon_text = None
-        if self.show_icons and icon_path and len(icon_path) <= 4:
+        if self.show_icons and IconManager.is_text_icon(icon_path):
             icon_text = icon_path
         elif (
             self.show_icons
             and self.use_fallback_icons
-            and tab_config.id not in self._icons
+            and self._icons.get(tab_config.id) is None
         ):
             icon_text = IconManager.get_fallback_text(self.fallback_icon_key)
 
@@ -248,34 +179,30 @@ class TabOpener(ABC):
 
         return text
 
-    def _add_tooltip(self, widget: Widget, text: str):
+    def _add_tooltip(self, widget: tk.Misc, text: str):
         if text:
             tooltip = TooltipWidget(widget, text)
             self._tooltips[id(widget)] = tooltip
             return tooltip
         return None
 
-    def _style_unclosable_widget(self, widget: Widget):
-        try:
-            if isinstance(widget, ttk.Button):
-                if not hasattr(self.__class__, "_unclosable_style_created"):
-                    style = ttk.Style()
-                    style.configure(
-                        "Unclosable.TButton", foreground="gray", background="lightgray"
-                    )
-                    self.__class__._unclosable_style_created = True
-                widget.configure(style="Unclosable.TButton")
-        except:
-            pass
+    def _style_unclosable_widget(self, widget: tk.Misc):
+        if not isinstance(widget, ttk.Button):
+            return
+        # Configure per widget: styles live in each Tk interpreter separately
+        style = ttk.Style(widget)
+        style.configure("Unclosable.TButton", foreground="gray", background="lightgray")
+        widget.configure(style="Unclosable.TButton")
 
     def _open_tab_safe(self, tab_id: str):
         try:
             if self.tab_manager:
                 self.tab_manager.open_tab(tab_id)
         except Exception as e:
+            logger.exception("Failed to open tab %r", tab_id)
             messagebox.showerror("Error", f"Failed to open tab: {e}")
 
-    def _create_button(self, parent: Widget, tab_config: TabConfig) -> ttk.Button:
+    def _create_button(self, parent: tk.Misc, tab_config: TabConfig) -> ttk.Button:
         btn_style = self.config.get("button_style", {})
 
         icon = self._load_icon(tab_config)

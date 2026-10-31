@@ -1,5 +1,6 @@
-from tkinter import *
+import tkinter as tk
 from collections import deque
+from typing import ClassVar
 
 
 class TooltipWidget:
@@ -7,7 +8,7 @@ class TooltipWidget:
 
     def __init__(
         self,
-        widget: Widget,
+        widget: tk.Misc,
         text: str,
         delay: int = 500,
         wraplength: int = 250,
@@ -44,12 +45,12 @@ class TooltipWidget:
         x = self.widget.winfo_rootx() + 20
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
 
-        self.tooltip = Toplevel(self.widget)
+        self.tooltip = tk.Toplevel(self.widget)
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.wm_geometry(f"+{x}+{y}")
         self.tooltip.attributes("-topmost", True)
 
-        Label(
+        tk.Label(
             self.tooltip,
             text=self.text,
             background="#ffffe0",
@@ -59,7 +60,7 @@ class TooltipWidget:
             padx=4,
             pady=2,
             wraplength=self.wraplength,
-            justify=LEFT,
+            justify=tk.LEFT,
         ).pack()
 
     def _hide_tooltip(self):
@@ -101,7 +102,7 @@ class TooltipWidget:
         self.text = new_text
         if self.tooltip:
             for child in self.tooltip.winfo_children():
-                if isinstance(child, Label):
+                if isinstance(child, tk.Label):
                     child.config(text=new_text)
                     break
 
@@ -109,20 +110,20 @@ class TooltipWidget:
 class ToastNotification:
     """A toast notification system supporting queued and stacked modes."""
 
-    COLORS = {
+    COLORS: ClassVar[dict[str, dict[str, str]]] = {
         "info": {"bg": "#d1ecf1", "fg": "#0c5460", "border": "#bee5eb"},
         "warning": {"bg": "#fff3cd", "fg": "#856404", "border": "#ffeaa7"},
         "error": {"bg": "#f8d7da", "fg": "#721c24", "border": "#f5c6cb"},
         "success": {"bg": "#d4edda", "fg": "#155724", "border": "#c3e6cb"},
     }
 
-    _queue = deque()
-    _active_toasts = []
-    _is_showing = False
+    _queue: ClassVar[deque] = deque()
+    _active_toasts: ClassVar[list[tk.Toplevel]] = []
+    _is_showing: ClassVar[bool] = False
 
     @staticmethod
     def show(
-        parent: Widget,
+        parent: tk.Misc,
         message: str,
         duration: int = 2000,
         toast_type: str = "info",
@@ -152,7 +153,7 @@ class ToastNotification:
 
     @staticmethod
     def _show_toast(
-        parent: Widget,
+        parent: tk.Misc,
         message: str,
         duration: int,
         toast_type: str,
@@ -195,7 +196,7 @@ class ToastNotification:
             x = screen_x + screen_width - toast_width - x_offset
             y = screen_y + y_offset
 
-        toast = Toplevel(root)
+        toast = tk.Toplevel(root)
         toast.wm_overrideredirect(True)
         toast.attributes("-topmost", True)
         toast.wm_geometry(f"{toast_width}x{toast_height}+{x}+{y}")
@@ -206,20 +207,20 @@ class ToastNotification:
             toast_type, ToastNotification.COLORS["info"]
         )
 
-        frame = Frame(toast, bg=color_scheme["border"], padx=2, pady=2)
-        frame.pack(fill=BOTH, expand=True)
+        frame = tk.Frame(toast, bg=color_scheme["border"], padx=2, pady=2)
+        frame.pack(fill=tk.BOTH, expand=True)
 
-        inner_frame = Frame(frame, bg=color_scheme["bg"])
-        inner_frame.pack(fill=BOTH, expand=True)
+        inner_frame = tk.Frame(frame, bg=color_scheme["bg"])
+        inner_frame.pack(fill=tk.BOTH, expand=True)
 
-        label = Label(
+        label = tk.Label(
             inner_frame,
             text=message,
             bg=color_scheme["bg"],
             fg=color_scheme["fg"],
             font=("TkDefaultFont", 9),
             wraplength=260,
-            justify=LEFT,
+            justify=tk.LEFT,
         )
         label.pack(expand=True, padx=10, pady=10)
 
