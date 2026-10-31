@@ -236,6 +236,8 @@ class IconManager:
         if not cls.is_image_path(icon_path):
             return None
 
+        if isinstance(size, int):
+            size = (size, size)
         size = tuple(size or cls._default_size)
         interp = master.tk if master is not None else None
 

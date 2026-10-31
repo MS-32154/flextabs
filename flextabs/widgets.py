@@ -47,6 +47,11 @@ class TooltipWidget:
         self.after_id = None
         if self.tooltip:
             return
+        try:
+            if not self.widget.winfo_exists():
+                return
+        except tk.TclError:
+            return  # widget (or its application) destroyed meanwhile
 
         palette = palette_for(self.widget)
         x = self.widget.winfo_rootx() + 12
@@ -149,26 +154,29 @@ class ToastNotification:
         position: str = "top-right",
         mode: str = "stacked",
     ):
-        ToastNotification._queue.append(
-            (parent, message, duration, toast_type, position, mode)
-        )
-        if mode == "queued":
-            if not ToastNotification._is_showing:
-                ToastNotification._show_next_queued()
-        else:
-            ToastNotification._show_toast(*ToastNotification._queue.popleft())
+        toast = (parent, message, duration, toast_type, position, mode)
+        if mode != "queued":
+            # Stacked toasts appear immediately and never touch the queue
+            ToastNotification._show_toast(*toast)
+            return
+        ToastNotification._queue.append(toast)
+        if not ToastNotification._is_showing:
+            ToastNotification._show_next_queued()
 
     @staticmethod
     def _show_next_queued():
-        if not ToastNotification._queue:
-            ToastNotification._is_showing = False
-            return
-
-        ToastNotification._is_showing = True
-        ToastNotification._show_toast(
-            *ToastNotification._queue.popleft(),
-            on_close=ToastNotification._show_next_queued,
-        )
+        """Show the next queued toast, skipping ones whose window is gone."""
+        while ToastNotification._queue:
+            toast = ToastNotification._queue.popleft()
+            ToastNotification._is_showing = True
+            try:
+                ToastNotification._show_toast(
+                    *toast, on_close=ToastNotification._show_next_queued
+                )
+                return
+            except tk.TclError:
+                continue  # its parent widget was destroyed meanwhile
+        ToastNotification._is_showing = False
 
     @staticmethod
     def _stack_offset() -> int:

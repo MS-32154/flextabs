@@ -164,22 +164,51 @@ def _prune_dead_interps(cache: dict, interp_of) -> None:
 
 # --- palette registry (lets toasts/tooltips match the nearest manager) ---------
 
-# (id(interp), toplevel path) -> (palette, interpreter)
-_registered: dict[tuple[int, str], tuple[Palette, object]] = {}
+# (id(interp), toplevel path) -> (interpreter, [(owner, palette), ...]); the
+# most recent registration wins and owners remove only their own entries.
+_registered: dict[tuple[int, str], tuple[object, list[tuple[object, Palette]]]] = {}
 
 
-def register_palette(widget: tk.Misc, palette: Palette):
-    """Associate ``palette`` with the toplevel window containing ``widget``."""
-    _prune_dead_interps(_registered, lambda entry: entry[1])
-    _registered[(id(widget.tk), str(widget.winfo_toplevel()))] = (palette, widget.tk)
+def _window_key(widget: tk.Misc) -> tuple[int, str]:
+    return (id(widget.tk), str(widget.winfo_toplevel()))
+
+
+def register_palette(widget: tk.Misc, palette: Palette, owner: object = "app"):
+    """Associate ``palette`` with the window containing ``widget``.
+
+    ``owner`` identifies who registered it, so :func:`unregister_palette` can
+    remove it again without affecting other owners in the same window.
+    """
+    _prune_dead_interps(_registered, lambda entry: entry[0])
+    key = _window_key(widget)
+    interp, stack = _registered.get(key, (widget.tk, []))
+    if interp is not widget.tk:
+        stack = []
+    stack = [entry for entry in stack if entry[0] != owner]
+    stack.append((owner, palette))
+    _registered[key] = (widget.tk, stack)
+
+
+def unregister_palette(widget: tk.Misc, owner: object = "app"):
+    """Remove ``owner``'s palette for ``widget``'s window, if registered."""
+    with contextlib.suppress(tk.TclError):
+        key = _window_key(widget)
+        entry = _registered.get(key)
+        if entry is None:
+            return
+        stack = [item for item in entry[1] if item[0] != owner]
+        if stack:
+            _registered[key] = (entry[0], stack)
+        else:
+            del _registered[key]
 
 
 def palette_for(widget: tk.Misc) -> Palette:
     """Palette registered for ``widget``'s window, else derived from ttk."""
     with contextlib.suppress(tk.TclError):
-        entry = _registered.get((id(widget.tk), str(widget.winfo_toplevel())))
-        if entry is not None and entry[1] is widget.tk:
-            return entry[0]
+        entry = _registered.get(_window_key(widget))
+        if entry is not None and entry[0] is widget.tk and entry[1]:
+            return entry[1][-1][1]
     try:
         return palette_from_style(widget)
     except tk.TclError:

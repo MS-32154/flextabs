@@ -329,7 +329,8 @@ pick_font_family(widget, candidates: tuple[str, ...]) -> str | None
 
 palette_from_style(widget) -> Palette     # palette matching the current ttk theme
 palette_for(widget) -> Palette            # palette registered for the window, else derived
-register_palette(widget, palette)         # used by TabManager and apply_app_theme
+register_palette(widget, palette, owner="app")  # palette for toasts/tooltips in a window
+unregister_palette(widget, owner="app")         # remove that owner's palette again
 resolve_palette(spec, widget) -> Palette  # "auto", "light", "dark" or a Palette
 ```
 

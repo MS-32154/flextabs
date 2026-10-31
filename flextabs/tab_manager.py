@@ -19,10 +19,13 @@ from .theme import (
     palette_from_style,
     register_palette,
     resolve_theme,
+    unregister_palette,
 )
 from .widgets import ToastNotification
 
 logger = logging.getLogger(__name__)
+
+_UNSET = object()  # sentinel: hover glyph not yet determined
 
 
 class TabManager(ttk.Frame):
@@ -217,12 +220,26 @@ class TabManager(ttk.Frame):
         self._theme_spec = spec
         self.theme: Theme | None = theme
         self._close_style: ClosableNotebookStyle | None = None
-        if theme is not None:
-            theme.ensure(self)
-            register_palette(self, theme.palette)
-            self.configure(style=theme.surface_frame)
-            if self.close_button_style == "button" and theme.has_close_glyph:
-                self._close_style = theme.closable_notebook_style(self)
+        self._hover_closable = _UNSET
+        if theme is None:
+            unregister_palette(self, owner=self._palette_owner)
+            return
+        theme.ensure(self)
+        register_palette(self, theme.palette, owner=self._palette_owner)
+        self.configure(style=theme.surface_frame)
+        if self.close_button_style == "button" and theme.has_close_glyph:
+            # One glyph style per palette, reused when switching back
+            styles = self.__dict__.setdefault("_close_styles", {})
+            style = styles.get(theme.key)
+            if style is None:
+                style = styles[theme.key] = theme.closable_notebook_style(self)
+            else:
+                style.ensure(self)
+            self._close_style = style
+
+    @property
+    def _palette_owner(self) -> str:
+        return f"TabManager-{id(self)}"
 
     def _notebook_style(self) -> str:
         if self.theme is None:
@@ -260,6 +277,7 @@ class TabManager(ttk.Frame):
             self.notebook.bind("<ButtonPress-1>", self._on_close_glyph_press, add="+")
             self.notebook.bind("<ButtonRelease-1>", self._on_close_glyph_click, add="+")
             self.notebook.bind("<Motion>", self._on_notebook_motion, add="+")
+            self.notebook.bind("<Leave>", self._reset_hover_glyph, add="+")
 
     def _glyph_tab_at(self, x: int, y: int) -> str | None:
         """Tab whose close glyph is at (x, y), if any."""
@@ -291,9 +309,13 @@ class TabManager(ttk.Frame):
             return
         tab_id = self._get_tab_id_at_position(event.x, event.y)
         closable = self.tab_configs[tab_id].closable if tab_id else None
-        if closable != getattr(self, "_hover_closable", object()):
+        if closable is not getattr(self, "_hover_closable", _UNSET):
             self._hover_closable = closable
             self._close_style.show_hover(closable, self)
+
+    def _reset_hover_glyph(self, event=None):
+        """Forget the cached hover glyph (tabs moved, or the pointer left)."""
+        self._hover_closable = _UNSET
 
     def _sync_close_glyph(self, tab_id: str | None):
         """Show the right glyph (close or lock) on the selected tab."""
@@ -600,6 +622,7 @@ class TabManager(ttk.Frame):
         # Select the new tab
         self.notebook.select(state["tab_object"])
         self._sync_close_glyph(tab_id)
+        self._reset_hover_glyph()
 
         # Update opener and fire event. The tab is open at this point, so
         # errors here are reported but do not count as an open failure.
@@ -699,6 +722,7 @@ class TabManager(ttk.Frame):
 
         # Update opener and fire event. The tab is closed at this point, so
         # errors here are reported but do not count as a close failure.
+        self._reset_hover_glyph()
         self._notify_opener(tab_id, False)
         self._fire_callback(self.on_tab_closed, tab_id, tab_id)
 
@@ -962,12 +986,6 @@ class TabManager(ttk.Frame):
             self._setup_opener(opener_type)
         except Exception:
             logger.exception("Could not rebuild %r opener", opener_type)
-        # The new opener packed itself after the notebook, which had already
-        # claimed the space; move the notebook back to the end of the order.
-        notebook = getattr(self, "notebook", None)
-        if notebook is not None:
-            notebook.pack_forget()
-            notebook.pack(fill=tk.BOTH, expand=True)
         for tab_id in self.get_open_tabs():
             self._notify_opener(tab_id, True)
         self._notify_current(self.get_current_tab())
@@ -1008,6 +1026,8 @@ class TabManager(ttk.Frame):
                 with contextlib.suppress(tk.TclError):
                     tab_object.destroy()
         self._current_tab_id = None
+        with contextlib.suppress(tk.TclError):
+            unregister_palette(self, owner=self._palette_owner)
 
         if hasattr(self, "opener"):
             try:

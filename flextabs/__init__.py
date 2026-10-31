@@ -118,14 +118,14 @@ def create_simple_tab_manager(parent, tab_configs, opener_type="sidebar", **kwar
     opener_config = kwargs.pop("opener_config", {})
     opener_config = {**default_opener_configs.get(opener_type, {}), **opener_config}
 
+    kwargs.setdefault("close_button_style", "right_click")
+    kwargs.setdefault("enable_keyboard_shortcuts", True)
+    kwargs.setdefault("show_notebook_icons", True)
     return TabManager(
         parent=parent,
         tab_configs=tab_configs,
         opener_type=opener_type,
         opener_config=opener_config,
-        close_button_style="right_click",
-        enable_keyboard_shortcuts=True,
-        show_notebook_icons=True,
         **kwargs,
     )
 

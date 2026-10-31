@@ -428,7 +428,7 @@ def test_theme_caches_drop_destroyed_roots():
         TabManager(r, configs("a"), theme="light")
         assert all(_interp_alive(i) for i in Theme._applied.values())
         assert all(_interp_alive(e[1]) for e in Theme._images.values())
-        assert all(_interp_alive(e[1]) for e in _registered.values())
+        assert all(_interp_alive(e[0]) for e in _registered.values())
     finally:
         r.destroy()
 
@@ -518,3 +518,130 @@ def test_enable_dpi_awareness_on_windows(monkeypatch):
     monkeypatch.setattr(ctypes, "windll", Windll(), raising=False)
     assert dpi.enable_dpi_awareness() is True
     assert calls == [2]
+
+
+# --- Second review fixes -----------------------------------------------------------
+
+
+def toast_messages():
+    """Messages of the toasts currently on screen."""
+    messages = []
+    for toast in ToastNotification._active_toasts:
+        card = toast.winfo_children()[0]
+        messages += [w.cget("text") for w in card.winfo_children() if w.cget("text")]
+    return messages
+
+
+@pytest.fixture
+def clean_toasts():
+    ToastNotification._queue.clear()
+    ToastNotification._is_showing = False
+    yield
+    ToastNotification._queue.clear()
+    ToastNotification._is_showing = False
+
+
+def test_queued_toast_with_destroyed_parent_does_not_block_queue(root, clean_toasts):
+    frame = ttk.Frame(root)
+    ToastNotification.show(frame, "first", 10_000, mode="queued")
+    ToastNotification.show(frame, "orphan", 10_000, mode="queued")
+    frame.destroy()
+    ToastNotification._active_toasts[-1].event_generate("<Button-1>")  # dismiss
+    assert ToastNotification._is_showing is False
+
+    ToastNotification.show(root, "later", 10_000, mode="queued")
+    assert "later" in toast_messages()
+
+
+def test_stacked_toast_does_not_steal_from_queue(root, clean_toasts):
+    ToastNotification.show(root, "q1", 10_000, mode="queued")
+    ToastNotification.show(root, "q2", 10_000, mode="queued")
+    ToastNotification.show(root, "stacked", 10_000)
+    assert "stacked" in toast_messages()
+    assert "q2" not in toast_messages()
+    assert [t[1] for t in ToastNotification._queue] == ["q2"]
+
+
+def test_int_icon_size_with_image_file(root, tmp_path):
+    from PIL import Image
+
+    path = tmp_path / "icon.png"
+    Image.new("RGB", (32, 32), "red").save(path)
+    m = TabManager(
+        root,
+        configs("a", icon=str(path)),
+        opener_type="toolbar",
+        opener_config={"icon_size": 20},
+    )
+    image = m.opener.buttons["a"].cget("image")
+    assert image
+    assert int(root.tk.call("image", "height", str(image[0]))) == 20
+
+
+def test_palette_unregistered_when_theme_removed_or_destroyed(root):
+    apply_app_theme(root, "light")
+    m = TabManager(root, configs("a"), theme="dark")
+    assert palette_for(root) is DARK
+    m.set_theme(None)
+    assert palette_for(root) is LIGHT  # back to the app's palette
+
+    m.set_theme("dark")
+    assert palette_for(root) is DARK
+    m.destroy()
+    assert palette_for(root) is LIGHT
+
+
+def test_create_simple_tab_manager_accepts_overrides(root):
+    from flextabs import create_simple_tab_manager
+
+    m = create_simple_tab_manager(
+        root, configs("a"), close_button_style="button", enable_keyboard_shortcuts=False
+    )
+    assert m.close_button_style == "button"
+    assert m.enable_keyboard_shortcuts is False
+
+
+def test_hover_glyph_after_theme_switch(root):
+    m = closable_manager(root, configs("a", "b"))
+    m.open_tab("a")
+    m.open_tab("b")
+    root.update()
+    a_x = next(x for x in range(300) if m._get_tab_id_at_position(x, 10) == "a")
+    m._on_notebook_motion(Ev(a_x, 10))
+    m.set_theme("dark")
+    root.update()
+    m._on_notebook_motion(Ev(a_x, 10))
+    assert m._close_style.hover_image.data() == m.theme.images(m)["close"].data()
+
+
+def test_close_glyph_style_reused_per_palette(root):
+    m = closable_manager(root, configs("a"))
+    m.set_theme("dark")
+    dark_style = m._close_style
+    m.set_theme("light")
+    m.set_theme("dark")
+    assert m._close_style is dark_style
+    assert m.notebook.cget("style") == dark_style.style
+
+
+def test_refresh_does_not_accumulate_tooltips(root):
+    m = TabManager(root, configs("a", "b", tooltip="tip"), opener_type="toolbar")
+    for i in range(3):
+        m.add_tab_config(TabConfig(f"x{i}", "X", Content, tooltip="tip"))
+    assert len(m.opener._tooltips) == len(m.opener.buttons) == 5
+
+
+def test_tooltip_after_widget_destroyed_is_harmless(root):
+    button = ttk.Button(root, text="x")
+    tip = TooltipWidget(button, "hello")
+    button.destroy()
+    tip._show_tooltip()  # e.g. a pending after() firing late
+    assert tip.tooltip is None
+
+
+def test_rebuilt_opener_packed_before_notebook(root):
+    m = TabManager(root, configs("a"), opener_type="sidebar", theme="light")
+    m.set_theme("dark")
+    slaves = m.pack_slaves()
+    assert slaves[-1] is m.notebook
+    assert slaves.index(m.opener.container) < slaves.index(m.notebook)

@@ -30,13 +30,16 @@ class ButtonOpener(TabOpener):
         if theme is not None:
             frame_kwargs.setdefault("style", theme.chrome_frame)
 
+        # Pack before the manager's notebook if it exists already (a rebuilt
+        # opener), so the notebook keeps taking only the remaining space
+        before = self._pack_before()
         if width:
             self.container = ttk.Frame(self.parent, width=width, **frame_kwargs)
-            self.container.pack(side=side, fill=tk.Y)
+            self.container.pack(side=side, fill=tk.Y, **before)
             self.container.pack_propagate(False)
         else:
             self.container = ttk.Frame(self.parent, **frame_kwargs)
-            self.container.pack(side=side, fill=fill)
+            self.container.pack(side=side, fill=fill, **before)
         self._widgets["container"] = self.container
 
         if theme is not None:
@@ -47,7 +50,7 @@ class ButtonOpener(TabOpener):
                 style=theme.divider,
                 **({"width": 1} if vertical else {"height": 1}),
             )
-            divider.pack(side=side, fill=tk.Y if vertical else tk.X)
+            divider.pack(side=side, fill=tk.Y if vertical else tk.X, **before)
             self._widgets["divider"] = divider
 
         inner = {"style": theme.chrome_frame} if theme is not None else {}
@@ -82,6 +85,16 @@ class ButtonOpener(TabOpener):
 
         self._sync_states()
 
+    def _pack_before(self) -> dict:
+        """``before=`` option placing opener widgets ahead of the notebook."""
+        notebook = getattr(self.tab_manager, "notebook", None)
+        try:
+            if notebook is not None and notebook.winfo_manager() == "pack":
+                return {"before": notebook}
+        except tk.TclError:
+            pass
+        return {}
+
     def _sync_states(self):
         """Re-apply open/current indication (e.g. after a rebuild)."""
         manager = self.tab_manager
@@ -96,6 +109,11 @@ class ButtonOpener(TabOpener):
             return False
 
         try:
+            # Drop tooltips of the buttons about to be destroyed
+            for tooltip in self._tooltips.values():
+                tooltip._hide_tooltip()
+            self._tooltips.clear()
+
             # Destroy existing buttons and frames
             for tab_id in list(self.buttons.keys()):
                 if tab_id in self.button_frames:
