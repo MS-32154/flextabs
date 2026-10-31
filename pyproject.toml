@@ -1,24 +1,54 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "flextabs"
-version = "0.2.0"
-description = "A flexible and extensible tab manager widget for tkinter applications built on top of ttk.Notebook"
+dynamic = ["version"]
+description = "A flexible tab manager widget for tkinter, built on ttk.Notebook, with sidebar/toolbar/menu openers, built-in icons and light/dark themes"
 readme = "README.md"
 requires-python = ">=3.15"
 license = "MIT"
-authors = [
-    {name = "MS-32154", email = "msttoffg@gmail.com"}
+license-files = ["LICENSE"]
+authors = [{ name = "MS-32154", email = "msttoffg@gmail.com" }]
+keywords = ["tkinter", "ttk", "notebook", "tabs", "gui", "widget", "theme", "icons"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Software Development :: User Interfaces",
+    "Topic :: Software Development :: Widget Sets",
+    "Typing :: Typed",
 ]
-keywords = ["tkinter", "ttk", "Notebook", "tabs", "gui", "widget", "interface"]
-dependencies = ["Pillow",]
+dependencies = ["Pillow>=10"]
 
 [project.urls]
 Homepage = "https://github.com/MS-32154/flextabs"
+Documentation = "https://ms-32154.github.io/flextabs/"
 "Bug Reports" = "https://github.com/MS-32154/flextabs/issues"
 Source = "https://github.com/MS-32154/flextabs"
+
+[project.gui-scripts]
+flextabs-demo = "flextabs.__main__:main"
+
+[dependency-groups]
+dev = ["pytest>=9", "pytest-cov>=7", "ruff>=0.17"]
+
+[tool.setuptools]
+packages = ["flextabs"]
+
+[tool.setuptools.dynamic]
+version = { attr = "flextabs.__version__" }
+
+[tool.setuptools.package-data]
+flextabs = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 target-version = "py315"
 line-length = 88

@@ -23,3 +23,8 @@ share/python-wheels/
 MANIFEST
 
 .pytest_cache/
+# Local environments and tool caches
+.venv/
+.coverage
+htmlcov/
+.ruff_cache/

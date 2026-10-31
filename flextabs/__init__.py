@@ -29,7 +29,7 @@ Basic Usage:
     )
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "MS-32154"
 __email__ = "msttoffg@gmail.com"
 __license__ = "MIT"
