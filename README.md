@@ -536,6 +536,8 @@ uv run ruff format flextabs tests       # format
 
 The tests run on GitHub Actions for every push to `main` and every pull request.
 
+**Releasing:** set `__version__` in `flextabs/__init__.py`, then publish a GitHub release tagged `v<version>` (for example `v0.3.0`). The publish workflow runs the tests, builds and checks the package, verifies the tag matches the version, and uploads to PyPI. Running the workflow by hand from the Actions tab does a dry run without uploading.
+
 ## API Reference
 
 The full API reference is at [ms-32154.github.io/flextabs](https://ms-32154.github.io/flextabs/) (source: [docs/index.md](docs/index.md)).
