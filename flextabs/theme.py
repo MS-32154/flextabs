@@ -503,17 +503,93 @@ def resolve_theme(spec: str | Palette | None, widget: tk.Misc) -> Theme | None:
     return Theme(resolve_palette(spec, widget))
 
 
+# --- fonts --------------------------------------------------------------------
+
+# Preferred UI and monospace families on X11, where Tk otherwise often picks a
+# legacy font. Windows and macOS already use the native system font.
+UI_FONTS = (
+    "Ubuntu Sans", "Ubuntu", "Cantarell", "Inter", "Noto Sans", "Segoe UI",
+    "Open Sans", "DejaVu Sans", "Liberation Sans",
+)  # fmt: skip
+MONO_FONTS = (
+    "Ubuntu Sans Mono", "Ubuntu Mono", "JetBrains Mono", "Cascadia Mono",
+    "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono",
+)  # fmt: skip
+
+_UI_NAMED_FONTS = (
+    "TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont",
+    "TkCaptionFont", "TkSmallCaptionFont", "TkIconFont", "TkTooltipFont",
+)  # fmt: skip
+
+
+def pick_font_family(widget: tk.Misc, candidates: tuple[str, ...]) -> str | None:
+    """First of ``candidates`` that Tk can use (case-insensitive), else None."""
+    available = {f.lower(): f for f in tkfont.families(root=widget)}
+    for name in candidates:
+        if name.lower() in available:
+            return available[name.lower()]
+    return None
+
+
+def apply_fonts(
+    root: tk.Misc,
+    family: str | None = "auto",
+    size: int | None = None,
+    mono_family: str | None = "auto",
+) -> str | None:
+    """Point Tk's named fonts at a modern UI font.
+
+    ``family="auto"`` picks the first available of :data:`UI_FONTS`, and only
+    on X11 (other platforms already use the system font). Pass a family name to
+    force one, or ``None`` to leave fonts unchanged. ``size`` is in points.
+    Returns the family applied, or None if nothing changed.
+
+    Note: Tk builds without Xft (``tk::pkgconfig get fontsystem`` is ``x11``)
+    only see legacy X11 fonts, so "auto" usually finds nothing there.
+    """
+    if family is None:
+        return None
+    x11 = root.tk.call("tk", "windowingsystem") == "x11"
+    if family == "auto":
+        family = pick_font_family(root, UI_FONTS) if x11 else None
+        if family is None:
+            return None
+    if mono_family == "auto":
+        mono_family = pick_font_family(root, MONO_FONTS) if x11 else None
+
+    for name in _UI_NAMED_FONTS:
+        with contextlib.suppress(tk.TclError):
+            options: dict = {"family": family}
+            if size is not None:
+                options["size"] = size
+            tkfont.nametofont(name, root=root).configure(**options)
+    if mono_family:
+        with contextlib.suppress(tk.TclError):
+            options = {"family": mono_family}
+            if size is not None:
+                options["size"] = size
+            tkfont.nametofont("TkFixedFont", root=root).configure(**options)
+    return family
+
+
 # --- whole-app theme (opt-in) --------------------------------------------------
 
 
-def apply_app_theme(root: tk.Misc, palette: str | Palette = "light") -> Palette:
+def apply_app_theme(
+    root: tk.Misc,
+    palette: str | Palette = "light",
+    font_family: str | None = "auto",
+    font_size: int | None = None,
+) -> Palette:
     """Restyle the whole application to match a palette.
 
     This switches the global ttk theme to ``clam`` and recolours the standard
     ttk widgets plus Text/Listbox/Menu defaults, so app content matches
-    FlexTabs. Returns the palette used.
+    FlexTabs. Fonts are updated with :func:`apply_fonts` (pass
+    ``font_family=None`` to keep them). Returns the palette used.
     """
     p = resolve_palette(palette, root)
+    apply_fonts(root, font_family, font_size)
     style = ttk.Style(root)
     style.theme_use("clam")
 

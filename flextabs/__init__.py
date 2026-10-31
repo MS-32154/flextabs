@@ -35,6 +35,7 @@ __email__ = "msttoffg@gmail.com"
 __license__ = "MIT"
 
 # Core components
+from .dpi import enable_dpi_awareness
 from .enums import CloseConfirmationType, CloseMode, TabPosition
 from .icons import IconManager
 
@@ -42,7 +43,7 @@ from .icons import IconManager
 from .openers import MenuOpener, SidebarOpener, ToolbarOpener
 from .tab_base import TabConfig, TabContent, TabOpener
 from .tab_manager import TabManager
-from .theme import DARK, LIGHT, Palette, apply_app_theme
+from .theme import DARK, LIGHT, Palette, apply_app_theme, apply_fonts
 
 # Widgets
 from .widgets import ToastNotification, TooltipWidget
@@ -74,6 +75,8 @@ __all__ = [
     "ToolbarOpener",
     "TooltipWidget",
     "apply_app_theme",
+    "apply_fonts",
+    "enable_dpi_awareness",
 ]
 
 

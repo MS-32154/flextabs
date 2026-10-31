@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
+from .dpi import enable_dpi_awareness
 from .enums import CloseConfirmationType, CloseMode
 from .icons import IconManager
 from .tab_base import TabConfig, TabContent
@@ -458,6 +459,7 @@ class DemoApp:
 
 
 def create_demo_app() -> tk.Tk:
+    enable_dpi_awareness()  # sharp rendering on high-DPI Windows displays
     root = tk.Tk()
     root.title("FlexTabs")
     root.geometry("960x620")

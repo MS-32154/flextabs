@@ -440,3 +440,81 @@ def test_set_theme_does_not_clear_other_managers_icons(root):
     cached = IconManager.get_builtin_icon("home", 16, LIGHT.text, root)
     a.set_theme("dark")
     assert IconManager.get_builtin_icon("home", 16, LIGHT.text, root) is cached
+
+
+# --- Fonts and DPI ---------------------------------------------------------------
+
+
+def test_pick_font_family_is_case_insensitive(root):
+    from tkinter import font as tkfont
+
+    from flextabs.theme import pick_font_family
+
+    existing = tkfont.families(root=root)[0]
+    assert pick_font_family(root, ("No Such Font", existing.upper())) == existing
+    assert pick_font_family(root, ("No Such Font",)) is None
+
+
+def test_apply_fonts_explicit_family(root):
+    from tkinter import font as tkfont
+
+    from flextabs import apply_fonts
+
+    family = tkfont.families(root=root)[0]
+    assert apply_fonts(root, family, size=11) == family
+    default = tkfont.nametofont("TkDefaultFont", root=root)
+    assert default.cget("family") == family
+    assert default.cget("size") == 11
+    assert tkfont.nametofont("TkHeadingFont", root=root).cget("family") == family
+
+
+def test_apply_fonts_auto_prefers_ui_fonts(root, monkeypatch):
+    from tkinter import font as tkfont
+
+    from flextabs import apply_fonts, theme
+
+    real = tkfont.families(root=root)
+    fake = (*real, "noto sans")  # pretend a preferred UI font is installed
+    monkeypatch.setattr(theme.tkfont, "families", lambda root=None: fake)
+    assert apply_fonts(root) == "noto sans"
+
+
+def test_apply_fonts_none_and_no_candidates_leave_fonts(root, monkeypatch):
+    from tkinter import font as tkfont
+
+    from flextabs import apply_fonts, theme
+
+    before = tkfont.nametofont("TkDefaultFont", root=root).actual()
+    assert apply_fonts(root, None) is None
+    monkeypatch.setattr(theme.tkfont, "families", lambda root=None: ("clean",))
+    assert apply_fonts(root) is None
+    apply_app_theme(root, "light", font_family=None)
+    assert tkfont.nametofont("TkDefaultFont", root=root).actual() == before
+
+
+def test_enable_dpi_awareness_is_noop_off_windows():
+    from flextabs import enable_dpi_awareness
+
+    assert enable_dpi_awareness() is False
+
+
+def test_enable_dpi_awareness_on_windows(monkeypatch):
+    import ctypes
+    import sys
+
+    from flextabs import dpi
+
+    calls = []
+
+    class Shcore:
+        def SetProcessDpiAwareness(self, level):
+            calls.append(level)
+            return 0
+
+    class Windll:
+        shcore = Shcore()
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(ctypes, "windll", Windll(), raising=False)
+    assert dpi.enable_dpi_awareness() is True
+    assert calls == [2]
