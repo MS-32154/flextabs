@@ -222,6 +222,20 @@ def glyph_x(m, tab_id, y=10):
     )
 
 
+def label_x(m, tab_id, y=10):
+    """x of the title label on ``tab_id`` (independent of font metrics)."""
+    nb = m.notebook
+    return next(
+        (
+            x
+            for x in range(nb.winfo_width())
+            if nb.identify(x, y) == "FlexTabs.label"
+            and m._get_tab_id_at_position(x, y) == tab_id
+        ),
+        None,
+    )
+
+
 def click(m, x, y=10, release_x=None):
     m._on_close_glyph_press(Ev(x, y))
     m._on_close_glyph_click(Ev(x if release_x is None else release_x, y))
@@ -286,7 +300,8 @@ def test_drag_onto_other_tabs_glyph_does_not_close(root):
     m.open_tab("b")
     root.update()
     x = glyph_x(m, "b")
-    a_label_x = 20
+    a_label_x = label_x(m, "a")
+    assert a_label_x is not None
     # press on tab a's label, release on tab b's glyph
     click(m, a_label_x, release_x=x)
     assert m.get_open_tabs() == ["a", "b"]
@@ -299,7 +314,9 @@ def test_click_on_tab_label_does_not_close(root):
     m.open_tab("a")
     root.update()
 
-    click(m, 20)
+    x = label_x(m, "a")
+    assert x is not None
+    click(m, x)
     assert m.get_open_tabs() == ["a"]
 
 
