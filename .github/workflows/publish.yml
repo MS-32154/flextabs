@@ -64,10 +64,8 @@ jobs:
           name: dist
           path: dist/
 
+      # Trusted publishing: PyPI trusts this repository's publish.yml workflow
+      # in the "pypi" environment, so no API token is stored anywhere. The
+      # action also uploads signed attestations for the files.
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # Uses the API token while it exists. To switch to trusted publishing,
-          # add this repository/workflow/environment ("pypi") as a trusted
-          # publisher on PyPI, then delete the PYPI_API_TOKEN secret.
-          password: ${{ secrets.PYPI_API_TOKEN }}
